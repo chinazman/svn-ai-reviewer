@@ -1,0 +1,44 @@
+# SVN 代码审核工具配置文件示例
+# 复制此文件为 config.yaml 并填入你的配置
+
+# AI 模型配置
+ai:
+  # 模型提供商类型: openai, deepseek, custom
+  provider: "deepseek"
+  
+  # API 配置
+  api_key: "your-api-key-here"  # 替换为你的 API Key
+  
+  # DeepSeek 配置示例
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-chat"
+  
+  # OpenAI 配置示例（取消注释以使用）
+  # base_url: "https://api.openai.com/v1"
+  # model: "gpt-4"
+  
+  # 请求参数
+  temperature: 0.3
+  max_tokens: 2000
+
+# 审核规则系统提示词
+review_prompt: |
+  你是一个专业的代码审核专家。请仔细审查以下代码变更，并从以下几个方面进行评估：
+  
+  1. 代码规范：检查代码风格、命名规范、注释质量
+  2. 潜在问题：识别可能的 bug、性能问题、安全隐患
+  3. 最佳实践：评估是否遵循了语言和框架的最佳实践
+  4. 可维护性：代码的可读性和可维护性
+  
+  请以结构化的方式给出审核结果，包括：
+  - 严重程度（高/中/低）
+  - 问题描述
+  - 改进建议
+  - 示例代码（如适用）
+  
+  如果代码质量良好，请给予肯定并指出亮点。
+
+# SVN 配置
+svn:
+  # SVN 命令路径（留空则使用系统 PATH）
+  command: "svn"

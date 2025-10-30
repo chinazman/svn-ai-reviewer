@@ -1,0 +1,31 @@
+package ai
+
+import (
+	"context"
+	"fmt"
+
+	"svn-code-reviewer/internal/config"
+)
+
+// ReviewResult AI 审核结果
+type ReviewResult struct {
+	FileName string
+	Content  string
+	Success  bool
+	Error    error
+}
+
+// Client AI 客户端接口
+type Client interface {
+	Review(ctx context.Context, fileName, diff, systemPrompt string) (*ReviewResult, error)
+}
+
+// NewClient 根据配置创建 AI 客户端
+func NewClient(cfg *config.AIConfig) (Client, error) {
+	switch cfg.Provider {
+	case "openai", "deepseek", "custom":
+		return NewOpenAIClient(cfg), nil
+	default:
+		return nil, fmt.Errorf("不支持的 AI 提供商: %s", cfg.Provider)
+	}
+}

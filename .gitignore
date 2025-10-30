@@ -1,0 +1,29 @@
+# 二进制文件
+svn-reviewer
+svn-reviewer.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 测试文件
+*.test
+*.out
+
+# Go 工作空间文件
+go.work
+
+# 配置文件（包含敏感信息）
+config.yaml
+config.local.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
