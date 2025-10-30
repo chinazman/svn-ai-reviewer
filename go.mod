@@ -3,7 +3,6 @@ module svn-code-reviewer
 go 1.21
 
 require (
-	github.com/sashabaranov/go-openai v1.20.4
 	github.com/spf13/cobra v1.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
