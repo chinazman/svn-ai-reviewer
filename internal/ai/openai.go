@@ -64,6 +64,13 @@ func NewOpenAIClient(cfg *config.AIConfig) *OpenAIClient {
 }
 
 func (c *OpenAIClient) Review(ctx context.Context, fileName, diff, systemPrompt string) (*ReviewResult, error) {
+	// 检查文件内容大小，避免请求过大
+	const maxDiffSize = 50000 // 50KB 限制
+	if len(diff) > maxDiffSize {
+		truncated := diff[:maxDiffSize]
+		diff = truncated + fmt.Sprintf("\n\n... (内容过长，已截断，原始大小: %d 字节)", len(diff))
+	}
+	
 	userPrompt := fmt.Sprintf("文件名: %s\n\n代码变更:\n```\n%s\n```\n\n请审核以上代码变更。", fileName, diff)
 
 	reqBody := chatRequest{
@@ -104,13 +111,51 @@ func (c *OpenAIClient) Review(ctx context.Context, fileName, diff, systemPrompt 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
+	// 打印完整请求报文
+	// fmt.Println("\n  ==================== 完整请求报文 ====================")
+	// fmt.Printf("  请求方法: %s\n", req.Method)
+	// fmt.Printf("  请求 URL: %s\n", url)
+	// fmt.Println("  请求头 (Headers):")
+	// for key, values := range req.Header {
+	// 	for _, value := range values {
+	// 		// 隐藏 API Key 的敏感部分
+	// 		if key == "Authorization" && len(value) > 30 {
+	// 			fmt.Printf("    %s: %s...%s (已隐藏部分内容)\n", key, value[:15], value[len(value)-5:])
+	// 		} else {
+	// 			fmt.Printf("    %s: %s\n", key, value)
+	// 		}
+	// 	}
+	// }
+	// fmt.Printf("  请求体大小: %d 字节\n", len(jsonData))
+	// fmt.Println("  请求体 (Body):")
+	// // 格式化 JSON 输出
+	// var prettyJSON bytes.Buffer
+	// if err := json.Indent(&prettyJSON, jsonData, "    ", "  "); err == nil {
+	// 	// 如果请求体太大，只打印前 3000 字符
+	// 	prettyStr := prettyJSON.String()
+	// 	if len(prettyStr) > 3000 {
+	// 		fmt.Printf("    %s\n    ... (已截断，总长度: %d 字节)\n", prettyStr[:3000], len(prettyStr))
+	// 	} else {
+	// 		fmt.Printf("    %s\n", prettyStr)
+	// 	}
+	// } else {
+	// 	// 如果格式化失败，直接输出原始 JSON
+	// 	if len(jsonData) > 3000 {
+	// 		fmt.Printf("    %s\n    ... (已截断，总长度: %d 字节)\n", string(jsonData[:3000]), len(jsonData))
+	// 	} else {
+	// 		fmt.Printf("    %s\n", string(jsonData))
+	// 	}
+	// }
+	// fmt.Println("  ======================================================\n")
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		errMsg := fmt.Sprintf("API 请求失败: %v\n请求 URL: %s\n可能原因:\n  1. 网络连接问题\n  2. API 地址配置错误\n  3. 防火墙或代理阻止\n  4. 请求体过大", err, url)
 		return &ReviewResult{
 			FileName: fileName,
 			Success:  false,
-			Error:    fmt.Errorf("API 请求失败: %w", err),
-		}, fmt.Errorf("API 请求失败: %w", err)
+			Error:    fmt.Errorf(errMsg),
+		}, fmt.Errorf(errMsg)
 	}
 	defer resp.Body.Close()
 

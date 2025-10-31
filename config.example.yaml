@@ -42,3 +42,14 @@ review_prompt: |
 svn:
   # SVN 命令路径（留空则使用系统 PATH）
   command: "svn"
+
+# 忽略的文件或目录（支持通配符）
+ignore:
+  - "*.log"
+  - "*.tmp"
+  - "node_modules/"
+  - "target/"
+  - ".idea/"
+  - ".vscode/"
+  - "*.class"
+  - "*.jar"

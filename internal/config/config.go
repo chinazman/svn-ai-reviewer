@@ -10,6 +10,7 @@ type Config struct {
 	AI           AIConfig  `yaml:"ai"`
 	ReviewPrompt string    `yaml:"review_prompt"`
 	SVN          SVNConfig `yaml:"svn"`
+	Ignore       []string  `yaml:"ignore"`
 }
 
 type AIConfig struct {

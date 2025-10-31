@@ -36,7 +36,7 @@ func runReview(cmd *cobra.Command, args []string) error {
 
 	// 获取变更文件
 	fmt.Println("正在扫描 SVN 变更...")
-	changes, err := svnClient.GetChangedFiles()
+	changes, err := svnClient.GetChangedFiles(cfg.Ignore)
 	if err != nil {
 		return fmt.Errorf("获取变更文件失败: %w", err)
 	}
@@ -89,19 +89,30 @@ func runReview(cmd *cobra.Command, args []string) error {
 
 		// 获取文件差异
 		var diff string
-		if change.Status == "A" {
-			// 新增文件，获取完整内容
+		if change.Status == "D" {
+			// 删除的文件，只显示删除信息
+			diff = fmt.Sprintf("文件已删除: %s", change.Path)
+		} else if change.Status == "A" || change.Status == "?" {
+			// 新增文件或未受控文件，获取完整内容
 			content, err := svnClient.GetFileContent(change.Path)
 			if err != nil {
 				fmt.Printf("  ⚠️  获取文件内容失败: %v\n\n", err)
 				continue
 			}
-			diff = fmt.Sprintf("新增文件，完整内容:\n%s", content)
+			statusDesc := "新增文件"
+			if change.Status == "?" {
+				statusDesc = "未受控文件（尚未加入版本控制）"
+			}
+			diff = fmt.Sprintf("%s，完整内容:\n%s", statusDesc, content)
 		} else {
-			// 修改或删除的文件，获取 diff
+			// 修改的文件，获取 diff
 			d, err := svnClient.GetFileDiff(change.Path)
 			if err != nil {
 				fmt.Printf("  ⚠️  获取文件差异失败: %v\n\n", err)
+				continue
+			}
+			if strings.TrimSpace(d) == "" {
+				fmt.Printf("  ℹ️  文件无差异内容\n\n")
 				continue
 			}
 			diff = d
@@ -139,6 +150,8 @@ func getStatusDesc(status string) string {
 		return "[修改]"
 	case "D":
 		return "[删除]"
+	case "?":
+		return "[未受控]"
 	default:
 		return "[" + status + "]"
 	}
