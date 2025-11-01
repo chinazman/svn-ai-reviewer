@@ -2,19 +2,19 @@
 
 ## Introduction
 
-本文档定义了SVN代码审核工具的在线版本审核模式功能需求。该功能允许用户直接连接到SVN服务器，搜索和审核指定版本的提交记录，而不仅限于本地工作目录的变更。这将使团队能够审核历史提交、其他开发者的代码，以及远程仓库中的任何版本。
+本文档定义了SVN代码审核工具的在线版本审核模式功能需求。该功能允许用户直接连接到SVN服务器，搜索和审核指定版本的提交记录，而不仅限于本地工作目录的变更。这将使团队能够审核历史提交、其他开发者的代码，以及远程仓库中的任何版本�?
 
 ## Glossary
 
-- **System**: SVN代码审核工具（svn-reviewer）
-- **Online_Mode**: 在线审核模式，直接连接SVN服务器进行版本审核
+- **System**: SVN代码审核工具（svn-reviewer�?
+- **Online_Mode**: 在线审核模式，直接连接SVN服务器进行版本审�?
 - **Local_Mode**: 本地审核模式，审核本地工作目录的变更（现有功能）
-- **SVN_Server**: SVN版本控制服务器
-- **Revision**: SVN版本号，标识特定的提交
+- **SVN_Server**: SVN版本控制服务�?
+- **Revision**: SVN版本号，标识特定的提�?
 - **Commit_Record**: SVN提交记录，包含版本号、作者、日期、消息等信息
 - **Credential**: SVN服务器认证凭据，包括用户名和密码
-- **Search_Criteria**: 搜索条件，包括目录路径、关键词、用户名等
-- **Batch_Size**: 批量搜索的记录数量，默认100条
+- **Search_Criteria**: 搜索条件，包括目录路径、关键词、用户名�?
+- **Batch_Size**: 批量搜索的记录数量，默认100�?
 
 ## Requirements
 
@@ -59,7 +59,7 @@
 
 ### Requirement 4
 
-**User Story:** 作为开发者，我希望能够像TortoiseSVN一样浏览上100条或下100条提交记录，以便查看更多历史版本
+**User Story:** 作为开发者，我希望能够像TortoiseSVN一样浏览上100条或�?00条提交记录，以便查看更多历史版本
 
 #### Acceptance Criteria
 
@@ -101,7 +101,7 @@
 
 ### Requirement 7
 
-**User Story:** 作为开发者，我希望系统能够处理SVN服务器连接错误和超时，以便在网络不稳定时获得清晰的错误提示
+**User Story:** 作为开发者，我希望系统能够处理SVN服务器连接错误和超时，以便在网络不稳定时获得清晰的错误提�?
 
 #### Acceptance Criteria
 

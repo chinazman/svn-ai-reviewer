@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"svn-code-reviewer/internal/config"
+	"svn-ai-reviewer/internal/config"
 )
 
 type OpenAIClient struct {

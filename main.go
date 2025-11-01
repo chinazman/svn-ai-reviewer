@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"svn-code-reviewer/cmd"
-	"svn-code-reviewer/gui"
+	"svn-ai-reviewer/cmd"
+	"svn-ai-reviewer/gui"
 )
 
 func main() {

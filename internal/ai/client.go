@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"svn-code-reviewer/internal/config"
+	"svn-ai-reviewer/internal/config"
 )
 
 // ReviewResult AI 审核结果

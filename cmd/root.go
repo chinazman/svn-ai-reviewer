@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"svn-code-reviewer/internal/config"
+	"svn-ai-reviewer/internal/config"
 )
 
 var (

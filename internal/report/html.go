@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"svn-code-reviewer/internal/ai"
+	"svn-ai-reviewer/internal/ai"
 )
 
 type FileReview struct {

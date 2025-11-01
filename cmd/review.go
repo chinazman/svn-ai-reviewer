@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"svn-code-reviewer/internal/ai"
-	"svn-code-reviewer/internal/report"
-	"svn-code-reviewer/internal/svn"
+	"svn-ai-reviewer/internal/ai"
+	"svn-ai-reviewer/internal/report"
+	"svn-ai-reviewer/internal/svn"
 )
 
 var (

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"svn-code-reviewer/internal/ai"
-	"svn-code-reviewer/internal/config"
-	"svn-code-reviewer/internal/report"
-	"svn-code-reviewer/internal/svn"
+	"svn-ai-reviewer/internal/ai"
+	"svn-ai-reviewer/internal/config"
+	"svn-ai-reviewer/internal/report"
+	"svn-ai-reviewer/internal/svn"
 )
 
 //go:embed templates/*

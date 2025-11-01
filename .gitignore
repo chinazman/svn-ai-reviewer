@@ -1,6 +1,6 @@
 # 二进制文件
-svn-reviewer
-svn-reviewer.exe
+svn-ai-reviewer
+svn-ai-reviewer.exe
 *.exe
 *.dll
 *.so

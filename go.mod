@@ -1,4 +1,4 @@
-module svn-code-reviewer
+module svn-ai-reviewer
 
 go 1.21
 
