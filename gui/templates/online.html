@@ -374,8 +374,9 @@
                     document.getElementById('configInfo').innerHTML = 
                         `<div class="info-box">✅ 已加载配置 - Provider: ${data.config.provider}, Model: ${data.config.model}</div>`;
                     
-                    // 尝试加载保存的SVN凭据
+                    // 尝试加载保存的SVN凭据和搜索参数
                     loadSavedCredentials();
+                    loadSearchParams();
                 }
             } catch (error) {
                 log('❌ 请求失败: ' + error.message);
@@ -443,10 +444,26 @@
             }
         }
 
+        // 加载保存的搜索参数
+        function loadSearchParams() {
+            const path = localStorage.getItem('search_path');
+            const keyword = localStorage.getItem('search_keyword');
+            const author = localStorage.getItem('search_author');
+            
+            if (path) document.getElementById('searchPath').value = path;
+            if (keyword) document.getElementById('searchKeyword').value = keyword;
+            if (author) document.getElementById('searchAuthor').value = author;
+        }
+
         async function searchLogs() {
             const path = document.getElementById('searchPath').value;
             const keyword = document.getElementById('searchKeyword').value;
             const author = document.getElementById('searchAuthor').value;
+            
+            // 保存搜索参数
+            localStorage.setItem('search_path', path);
+            localStorage.setItem('search_keyword', keyword);
+            localStorage.setItem('search_author', author);
             
             log('正在搜索提交记录...');
             
@@ -571,6 +588,17 @@
                 `;
             });
             tbody.innerHTML = html;
+            
+            // 更新全选复选框状态
+            updateSelectAllFilesCheckbox();
+        }
+        
+        function updateSelectAllFilesCheckbox() {
+            const selectAllCheckbox = document.getElementById('selectAllFiles');
+            if (selectAllCheckbox && files.length > 0) {
+                const allSelected = files.every(f => selectedFileIndices.has(f.index));
+                selectAllCheckbox.checked = allSelected;
+            }
         }
 
         async function viewOnlineDiff(index) {
@@ -640,6 +668,8 @@
             } else {
                 selectedFileIndices.add(index);
             }
+            // 更新全选复选框状态
+            updateSelectAllFilesCheckbox();
         }
 
         function getStatusText(status) {
