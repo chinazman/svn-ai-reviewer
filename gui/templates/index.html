@@ -363,11 +363,65 @@
                     <div class="file-item">
                         <input type="checkbox" ${checked} onchange="toggleFile(${file.index})" id="file-${file.index}">
                         <span class="file-status ${statusClass}">${statusText}</span>
-                        <span>${file.path}</span>
+                        <span style="flex: 1">${file.path}</span>
+                        <button onclick="viewDiff(${file.index})" style="padding: 4px 12px; font-size: 12px;">查看变更</button>
                     </div>
                 `;
             });
             fileList.innerHTML = html;
+        }
+
+        async function viewDiff(index) {
+            const workDir = document.getElementById('workDir').value;
+            
+            try {
+                const response = await fetch('/api/diff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ work_dir: workDir, index: index })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    alert('获取变更失败: ' + data.error);
+                } else {
+                    showDiffModal(data.file, data.status, data.content);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
+
+        function showDiffModal(file, status, content) {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+            
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = 'background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+            
+            const statusText = getStatusText(status);
+            modalContent.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">${file} <span class="file-status status-${status}">${statusText}</span></h3>
+                    <button onclick="this.closest('div').parentElement.parentElement.remove()" style="padding: 8px 16px;">关闭</button>
+                </div>
+                <pre style="background: #f4f4f4; padding: 15px; border-radius: 4px; overflow: auto; max-height: 70vh; font-size: 13px; line-height: 1.5;">${escapeHtml(content)}</pre>
+            `;
+            
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            };
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         function getStatusText(status) {

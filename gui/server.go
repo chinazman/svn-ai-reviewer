@@ -44,10 +44,12 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/load-config", s.handleLoadConfig)
 	http.HandleFunc("/api/scan", s.handleScan)
 	http.HandleFunc("/api/review", s.handleReview)
+	http.HandleFunc("/api/diff", s.handleDiff) // 查看文件变更
 	http.HandleFunc("/api/online/connect", s.handleOnlineConnect)
 	http.HandleFunc("/api/online/search", s.handleOnlineSearch)
 	http.HandleFunc("/api/online/files", s.handleOnlineFiles)
 	http.HandleFunc("/api/online/review", s.handleOnlineReview)
+	http.HandleFunc("/api/online/diff", s.handleOnlineDiff) // 在线模式查看变更
 	http.HandleFunc("/api/logs", s.handleLogs) // SSE日志流
 
 	addr := "localhost:8080"
@@ -676,4 +678,138 @@ func (s *Server) sendLog(format string, args ...interface{}) {
 	default:
 		// 通道满了，丢弃消息
 	}
+}
+
+
+// handleDiff 处理本地模式的文件变更查看
+func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.cfg == nil {
+		respondJSON(w, map[string]interface{}{"error": "请先加载配置文件"}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		WorkDir string `json:"work_dir"`
+		Index   int    `json:"index"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	if req.Index < 0 || req.Index >= len(s.changes) {
+		respondJSON(w, map[string]interface{}{"error": "无效的文件索引"}, http.StatusBadRequest)
+		return
+	}
+
+	change := s.changes[req.Index]
+	svnClient := svn.NewClient(s.cfg.SVN.Command, req.WorkDir)
+
+	var content string
+
+	if change.Status == "D" {
+		content = fmt.Sprintf("文件已删除: %s", change.Path)
+	} else if change.Status == "A" || change.Status == "?" {
+		fileContent, err := svnClient.GetFileContent(change.Path)
+		if err != nil {
+			respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
+		statusDesc := "新增文件"
+		if change.Status == "?" {
+			statusDesc = "未受控文件"
+		}
+		content = fmt.Sprintf("%s，完整内容:\n\n%s", statusDesc, fileContent)
+	} else {
+		diff, err := svnClient.GetFileDiff(change.Path)
+		if err != nil {
+			respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
+		content = diff
+	}
+
+	respondJSON(w, map[string]interface{}{
+		"success": true,
+		"file":    change.Path,
+		"status":  change.Status,
+		"content": content,
+	}, http.StatusOK)
+}
+
+// handleOnlineDiff 处理在线模式的文件变更查看
+func (s *Server) handleOnlineDiff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.svnClient == nil {
+		respondJSON(w, map[string]interface{}{"error": "请先连接SVN服务器"}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	if req.Index < 0 || req.Index >= len(s.changes) {
+		respondJSON(w, map[string]interface{}{"error": "无效的文件索引"}, http.StatusBadRequest)
+		return
+	}
+
+	file := s.changes[req.Index]
+	var content string
+
+	if file.Status == "D" {
+		content = fmt.Sprintf("文件已删除: %s (r%d)", file.Path, file.Revision)
+	} else if file.Status == "A" {
+		fileContent, err := s.svnClient.GetFileContentAtRevision(file.Revision, file.Path)
+		if err != nil {
+			// 备选：使用整个版本的diff
+			fullDiff, err2 := s.svnClient.GetRevisionDiff(file.Revision, "")
+			if err2 == nil {
+				content = fullDiff
+			} else {
+				respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
+				return
+			}
+		} else {
+			content = fmt.Sprintf("新增文件，完整内容:\n\n%s", fileContent)
+		}
+	} else {
+		diff, err := s.svnClient.GetRevisionDiff(file.Revision, file.Path)
+		if err != nil {
+			respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
+		if strings.TrimSpace(diff) == "" {
+			// 尝试整个版本的diff
+			fullDiff, err2 := s.svnClient.GetRevisionDiff(file.Revision, "")
+			if err2 == nil {
+				content = fullDiff
+			} else {
+				content = "无法获取文件差异"
+			}
+		} else {
+			content = diff
+		}
+	}
+
+	respondJSON(w, map[string]interface{}{
+		"success":  true,
+		"file":     file.Path,
+		"status":   file.Status,
+		"revision": file.Revision,
+		"content":  content,
+	}, http.StatusOK)
 }
