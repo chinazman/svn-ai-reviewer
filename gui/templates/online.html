@@ -321,11 +321,14 @@
                 const reportURL = message.substring('REPORT_URL:'.length);
                 // 在新标签页中打开报告
                 window.open(reportURL, '_blank');
-                log('✅ 已在新标签页打开报告');
+                // 直接添加到日志区域，避免递归调用
+                const timestamp2 = new Date().toLocaleTimeString();
+                logArea.textContent += `[${timestamp2}] ✅ 已在新标签页打开报告\n`;
+                logArea.scrollTop = logArea.scrollHeight;
             }
             
-            // 检查是否是审核完成的消息
-            if (message.includes('所有文件审核完成')) {
+            // 检查是否是审核完成的消息或报告URL消息（恢复按钮状态）
+            if (message.includes('所有文件审核完成') || message.startsWith('REPORT_URL:')) {
                 const reviewBtn = document.getElementById('reviewBtn');
                 if (reviewBtn) {
                     reviewBtn.disabled = false;
