@@ -315,6 +315,15 @@
             const timestamp = new Date().toLocaleTimeString();
             logArea.textContent += `[${timestamp}] ${message}\n`;
             logArea.scrollTop = logArea.scrollHeight;
+            
+            // 检查是否是审核完成的消息
+            if (message.includes('所有文件审核完成')) {
+                const reviewBtn = document.getElementById('reviewBtn');
+                if (reviewBtn) {
+                    reviewBtn.disabled = false;
+                    reviewBtn.textContent = '开始审核';
+                }
+            }
         }
 
         // 连接SSE日志流
@@ -598,18 +607,17 @@
                 if (data.error) {
                     log('❌ ' + data.error);
                     alert('审核失败: ' + data.error);
-                } else {
-                    log('✅ ' + data.message);
+                    // 出错时恢复按钮
+                    reviewBtn.disabled = false;
+                    reviewBtn.textContent = '开始审核';
                 }
+                // 成功时不恢复按钮，等待SSE消息"所有文件审核完成"
             } catch (error) {
                 log('❌ 请求失败: ' + error.message);
                 alert('请求失败: ' + error.message);
-            } finally {
-                // 延迟恢复按钮，给用户时间看到"审核中"状态
-                setTimeout(() => {
-                    reviewBtn.disabled = false;
-                    reviewBtn.textContent = '开始审核';
-                }, 2000);
+                // 出错时恢复按钮
+                reviewBtn.disabled = false;
+                reviewBtn.textContent = '开始审核';
             }
         }
 
