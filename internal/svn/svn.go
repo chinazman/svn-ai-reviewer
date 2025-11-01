@@ -86,6 +86,15 @@ func (c *Client) GetChangedFiles(ignorePatterns []string) ([]FileChange, error) 
 				continue
 			}
 			
+			// 检查是否是目录（对于非删除的文件）
+			if status != "D" {
+				fullPath := filepath.Join(c.workDir, path)
+				if fileInfo, err := os.Stat(fullPath); err == nil && fileInfo.IsDir() {
+					// 是目录，跳过
+					continue
+				}
+			}
+			
 			changes = append(changes, FileChange{
 				Path:   path,
 				Status: status,
@@ -369,8 +378,14 @@ func (c *Client) GetRevisionFiles(revision int) ([]FileChange, error) {
 		// 解析路径格式: "A /path/to/file" 或 "M /path/to/file"
 		parts := strings.Fields(path)
 		if len(parts) >= 2 {
+			filePath := parts[1]
+			// 过滤目录：SVN中目录路径通常以 / 结尾
+			if strings.HasSuffix(filePath, "/") {
+				continue
+			}
+			
 			changes = append(changes, FileChange{
-				Path:     parts[1],
+				Path:     filePath,
 				Status:   parts[0],
 				Revision: revision,
 			})
