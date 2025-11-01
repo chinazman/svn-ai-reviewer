@@ -235,6 +235,7 @@
     <script>
         let files = [];
         let selectedIndices = new Set();
+        let eventSource = null;
 
         // 从 localStorage 加载工作目录
         function loadWorkDir() {
@@ -254,6 +255,25 @@
             const timestamp = new Date().toLocaleTimeString();
             logArea.textContent += `[${timestamp}] ${message}\n`;
             logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // 连接SSE日志流
+        function connectLogs() {
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            eventSource = new EventSource('/api/logs');
+            
+            eventSource.onmessage = function(event) {
+                log(event.data);
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('SSE Error:', error);
+                // 自动重连
+                setTimeout(connectLogs, 5000);
+            };
         }
 
         async function loadConfig() {
@@ -381,14 +401,11 @@
             }
 
             const workDir = document.getElementById('workDir').value;
-            // 保存工作目录
             saveWorkDir(workDir);
             
             const reviewBtn = document.getElementById('reviewBtn');
             reviewBtn.disabled = true;
             reviewBtn.innerHTML = '<span class="loading"></span> 审核中...';
-            
-            log(`\n开始审核 ${selectedIndices.size} 个文件...`);
             
             try {
                 const response = await fetch('/api/review', {
@@ -405,15 +422,17 @@
                     log('❌ ' + data.error);
                     alert('审核失败: ' + data.error);
                 } else {
-                    log('✅ 审核完成！');
-                    log(`📄 报告已生成: ${data.report_path}`);
+                    log('✅ ' + data.message);
                 }
             } catch (error) {
                 log('❌ 请求失败: ' + error.message);
                 alert('请求失败: ' + error.message);
             } finally {
-                reviewBtn.disabled = false;
-                reviewBtn.textContent = '开始审核';
+                // 延迟恢复按钮，给用户时间看到"审核中"状态
+                setTimeout(() => {
+                    reviewBtn.disabled = false;
+                    reviewBtn.textContent = '开始审核';
+                }, 2000);
             }
         }
 
@@ -421,6 +440,14 @@
         window.onload = () => {
             loadWorkDir();
             loadConfig();
+            connectLogs(); // 连接SSE日志流
+        };
+
+        // 页面卸载时关闭SSE连接
+        window.onbeforeunload = () => {
+            if (eventSource) {
+                eventSource.close();
+            }
         };
     </script>
 </body>

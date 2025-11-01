@@ -29,10 +29,13 @@ type Server struct {
 	logEntries []svn.LogEntry
 	svnClient  *svn.Client
 	mode       string // "local" or "online"
+	logChannel chan string // SSE日志通道
 }
 
 func NewServer() *Server {
-	return &Server{}
+	return &Server{
+		logChannel: make(chan string, 100),
+	}
 }
 
 func (s *Server) Start() error {
@@ -45,6 +48,7 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/online/search", s.handleOnlineSearch)
 	http.HandleFunc("/api/online/files", s.handleOnlineFiles)
 	http.HandleFunc("/api/online/review", s.handleOnlineReview)
+	http.HandleFunc("/api/logs", s.handleLogs) // SSE日志流
 
 	addr := "localhost:8080"
 	fmt.Printf("🚀 SVN 代码审核工具已启动\n")
@@ -194,89 +198,105 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 执行审核
-	svnClient := svn.NewClient(s.cfg.SVN.Command, req.WorkDir)
-	aiClient, err := ai.NewClient(&s.cfg.AI)
-	if err != nil {
-		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
-		return
-	}
-
-	ctx := context.Background()
-	htmlReport := &report.Report{
-		Title:       "SVN 代码审核报告",
-		GeneratedAt: time.Now(),
-		WorkDir:     req.WorkDir,
-		Reviews:     make([]report.FileReview, 0),
-	}
-
-	for _, change := range filesToReview {
-		fileReview := report.FileReview{
-			FileName: change.Path,
-			Status:   change.Status,
-		}
-
-		var diff string
-		var skipReview bool
-
-		if change.Status == "D" {
-			diff = fmt.Sprintf("文件已删除: %s", change.Path)
-		} else if change.Status == "A" || change.Status == "?" {
-			content, err := svnClient.GetFileContent(change.Path)
-			if err != nil {
-				fileReview.Error = err
-				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
-				continue
-			}
-			statusDesc := "新增文件"
-			if change.Status == "?" {
-				statusDesc = "未受控文件（尚未加入版本控制）"
-			}
-			diff = fmt.Sprintf("%s，完整内容:\n%s", statusDesc, content)
-		} else {
-			d, err := svnClient.GetFileDiff(change.Path)
-			if err != nil {
-				fileReview.Error = err
-				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
-				continue
-			}
-			if strings.TrimSpace(d) == "" {
-				skipReview = true
-			}
-			diff = d
-		}
-
-		if strings.TrimSpace(diff) == "" || skipReview {
-			continue
-		}
-
-		result, err := aiClient.Review(ctx, change.Path, diff, s.cfg.ReviewPrompt)
+	// 在后台执行审核
+	go func() {
+		s.sendLog("开始审核 %d 个文件...", len(filesToReview))
+		
+		svnClient := svn.NewClient(s.cfg.SVN.Command, req.WorkDir)
+		aiClient, err := ai.NewClient(&s.cfg.AI)
 		if err != nil {
-			fileReview.Error = err
-		} else {
-			fileReview.Result = result
+			s.sendLog("❌ 创建AI客户端失败: %v", err)
+			return
 		}
 
-		htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
-	}
+		ctx := context.Background()
+		htmlReport := &report.Report{
+			Title:       "SVN 代码审核报告",
+			GeneratedAt: time.Now(),
+			WorkDir:     req.WorkDir,
+			Reviews:     make([]report.FileReview, 0),
+		}
 
-	// 生成报告
-	reportPath, err := report.GenerateHTML(htmlReport, s.cfg.Report.OutputDir)
-	if err != nil {
-		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
-		return
-	}
+		for i, change := range filesToReview {
+			s.sendLog("[%d/%d] 正在审核: %s", i+1, len(filesToReview), change.Path)
+			fileReview := report.FileReview{
+				FileName: change.Path,
+				Status:   change.Status,
+			}
 
-	absPath, _ := filepath.Abs(reportPath)
+			var diff string
+			var skipReview bool
 
-	// 自动打开浏览器
-	if s.cfg.Report.AutoOpen {
-		report.OpenInBrowser(reportPath)
-	}
+			if change.Status == "D" {
+				diff = fmt.Sprintf("文件已删除: %s", change.Path)
+			} else if change.Status == "A" || change.Status == "?" {
+				content, err := svnClient.GetFileContent(change.Path)
+				if err != nil {
+					s.sendLog("  ⚠️  获取文件内容失败: %v", err)
+					fileReview.Error = err
+					htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+					continue
+				}
+				statusDesc := "新增文件"
+				if change.Status == "?" {
+					statusDesc = "未受控文件（尚未加入版本控制）"
+				}
+				diff = fmt.Sprintf("%s，完整内容:\n%s", statusDesc, content)
+			} else {
+				d, err := svnClient.GetFileDiff(change.Path)
+				if err != nil {
+					s.sendLog("  ⚠️  获取文件差异失败: %v", err)
+					fileReview.Error = err
+					htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+					continue
+				}
+				if strings.TrimSpace(d) == "" {
+					skipReview = true
+				}
+				diff = d
+			}
 
+			if strings.TrimSpace(diff) == "" || skipReview {
+				s.sendLog("  ℹ️  文件无差异内容，跳过审核")
+				continue
+			}
+
+			result, err := aiClient.Review(ctx, change.Path, diff, s.cfg.ReviewPrompt)
+			if err != nil {
+				s.sendLog("  ❌ 审核失败: %v", err)
+				fileReview.Error = err
+			} else {
+				s.sendLog("  ✅ 审核完成")
+				fileReview.Result = result
+			}
+
+				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+		}
+
+		// 生成报告
+		s.sendLog("正在生成HTML报告...")
+		reportPath, err := report.GenerateHTML(htmlReport, s.cfg.Report.OutputDir)
+		if err != nil {
+			s.sendLog("❌ 生成报告失败: %v", err)
+			return
+		}
+
+		absPath, _ := filepath.Abs(reportPath)
+		s.sendLog("✅ 报告已生成: %s", absPath)
+
+		// 自动打开浏览器
+		if s.cfg.Report.AutoOpen {
+			s.sendLog("正在打开浏览器...")
+			report.OpenInBrowser(reportPath)
+		}
+
+		s.sendLog("所有文件审核完成！")
+	}()
+
+	// 立即返回，审核在后台进行
 	respondJSON(w, map[string]interface{}{
-		"success":     true,
-		"report_path": absPath,
+		"success": true,
+		"message": "审核已开始，请查看日志",
 	}, http.StatusOK)
 }
 
@@ -486,48 +506,56 @@ func (s *Server) handleOnlineReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 执行审核
-	aiClient, err := ai.NewClient(&s.cfg.AI)
-	if err != nil {
-		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
-		return
-	}
-
-	ctx := context.Background()
-	htmlReport := &report.Report{
-		Title:       "SVN 在线代码审核报告",
-		GeneratedAt: time.Now(),
-		WorkDir:     "在线审核",
-		Reviews:     make([]report.FileReview, 0),
-	}
-
-	for _, file := range filesToReview {
-		fileReview := report.FileReview{
-			FileName: fmt.Sprintf("%s (r%d)", file.Path, file.Revision),
-			Status:   file.Status,
+	// 在后台执行审核
+	go func() {
+		s.sendLog("开始审核 %d 个文件...", len(filesToReview))
+		
+		aiClient, err := ai.NewClient(&s.cfg.AI)
+		if err != nil {
+			s.sendLog("❌ 创建AI客户端失败: %v", err)
+			return
 		}
 
-		// 删除的文件直接跳过
-		if file.Status == "D" {
-			continue
+		ctx := context.Background()
+		htmlReport := &report.Report{
+			Title:       "SVN 在线代码审核报告",
+			GeneratedAt: time.Now(),
+			WorkDir:     "在线审核",
+			Reviews:     make([]report.FileReview, 0),
 		}
 
-		var diff string
-		var err error
+		for i, file := range filesToReview {
+			s.sendLog("[%d/%d] 正在审核: %s (r%d)", i+1, len(filesToReview), file.Path, file.Revision)
+			fileReview := report.FileReview{
+				FileName: fmt.Sprintf("%s (r%d)", file.Path, file.Revision),
+				Status:   file.Status,
+			}
 
-		// 对于新增文件，获取完整内容（纯文本，不带diff格式）
-		if file.Status == "A" {
-			content, err := s.svnClient.GetFileContentAtRevision(file.Revision, file.Path)
-			if err != nil {
-				// 备选方案：使用整个版本的diff
-				fullDiff, err2 := s.svnClient.GetRevisionDiff(file.Revision, "")
-				if err2 == nil && strings.TrimSpace(fullDiff) != "" {
-					diff = fullDiff
-				} else {
-					fileReview.Error = err
-					htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
-					continue
-				}
+			// 删除的文件直接跳过
+			if file.Status == "D" {
+				s.sendLog("  ℹ️  删除的文件，跳过审核")
+				continue
+			}
+
+			var diff string
+			var err error
+
+			// 对于新增文件，获取完整内容（纯文本，不带diff格式）
+			if file.Status == "A" {
+				s.sendLog("  ℹ️  新增文件，获取完整内容")
+				content, err := s.svnClient.GetFileContentAtRevision(file.Revision, file.Path)
+				if err != nil {
+					s.sendLog("  ⚠️  获取文件内容失败，尝试使用整个版本的diff")
+					// 备选方案：使用整个版本的diff
+					fullDiff, err2 := s.svnClient.GetRevisionDiff(file.Revision, "")
+					if err2 == nil && strings.TrimSpace(fullDiff) != "" {
+						diff = fullDiff
+					} else {
+						s.sendLog("  ❌ 无法获取文件内容")
+						fileReview.Error = err
+						htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+						continue
+					}
 			} else {
 				// 直接使用纯文本内容，不添加任何前缀
 				diff = content
@@ -555,32 +583,97 @@ func (s *Server) handleOnlineReview(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		result, err := aiClient.Review(ctx, file.Path, diff, s.cfg.ReviewPrompt)
-		if err != nil {
-			fileReview.Error = err
-		} else {
-			fileReview.Result = result
+			result, err := aiClient.Review(ctx, file.Path, diff, s.cfg.ReviewPrompt)
+			if err != nil {
+				s.sendLog("  ❌ 审核失败: %v", err)
+				fileReview.Error = err
+			} else {
+				s.sendLog("  ✅ 审核完成")
+				fileReview.Result = result
+			}
+
+			htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
 		}
 
-		htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
-	}
+		// 生成报告
+		s.sendLog("正在生成HTML报告...")
+		reportPath, err := report.GenerateHTML(htmlReport, s.cfg.Report.OutputDir)
+		if err != nil {
+			s.sendLog("❌ 生成报告失败: %v", err)
+			return
+		}
 
-	// 生成报告
-	reportPath, err := report.GenerateHTML(htmlReport, s.cfg.Report.OutputDir)
-	if err != nil {
-		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
+		absPath, _ := filepath.Abs(reportPath)
+		s.sendLog("✅ 报告已生成: %s", absPath)
+
+		// 自动打开浏览器
+		if s.cfg.Report.AutoOpen {
+			s.sendLog("正在打开浏览器...")
+			report.OpenInBrowser(reportPath)
+		}
+
+		s.sendLog("所有文件审核完成！")
+	}()
+
+	// 立即返回，审核在后台进行
+	respondJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "审核已开始，请查看日志",
+	}, http.StatusOK)
+}
+
+
+// handleLogs 处理SSE日志流
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	// 设置SSE响应头
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// 创建一个新的日志通道用于这个连接
+	logChan := make(chan string, 10)
+	
+	// 启动一个goroutine来转发日志
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case msg := <-s.logChannel:
+				logChan <- msg
+			case <-done:
+				return
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}()
+
+	// 发送日志到客户端
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 		return
 	}
 
-	absPath, _ := filepath.Abs(reportPath)
-
-	// 自动打开浏览器
-	if s.cfg.Report.AutoOpen {
-		report.OpenInBrowser(reportPath)
+	for {
+		select {
+		case msg := <-logChan:
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+			flusher.Flush()
+		case <-r.Context().Done():
+			close(done)
+			return
+		}
 	}
+}
 
-	respondJSON(w, map[string]interface{}{
-		"success":     true,
-		"report_path": absPath,
-	}, http.StatusOK)
+// sendLog 发送日志消息到SSE通道
+func (s *Server) sendLog(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	select {
+	case s.logChannel <- msg:
+	default:
+		// 通道满了，丢弃消息
+	}
 }
