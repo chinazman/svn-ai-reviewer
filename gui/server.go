@@ -51,11 +51,15 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/online/review", s.handleOnlineReview)
 	http.HandleFunc("/api/online/diff", s.handleOnlineDiff) // 在线模式查看变更
 	http.HandleFunc("/api/logs", s.handleLogs) // SSE日志流
+	
+	// 提供静态文件服务 - 报告目录
+	http.Handle("/reports/", http.StripPrefix("/reports/", http.FileServer(http.Dir("reports"))))
 
 	addr := "localhost:8080"
 	fmt.Printf("🚀 SVN 代码审核工具已启动\n")
 	fmt.Printf("📱 本地模式: http://%s\n", addr)
 	fmt.Printf("📱 在线模式: http://%s/online\n", addr)
+	fmt.Printf("📊 报告目录: http://%s/reports/\n", addr)
 	fmt.Println("按 Ctrl+C 停止服务器")
 
 	// 自动打开浏览器
@@ -286,11 +290,11 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 		absPath, _ := filepath.Abs(reportPath)
 		s.sendLog("✅ 报告已生成: %s", absPath)
 
-		// 自动打开浏览器
-		if s.cfg.Report.AutoOpen {
-			s.sendLog("正在打开浏览器...")
-			report.OpenInBrowser(reportPath)
-		}
+		// 发送报告URL到前端，由前端打开
+		// 将文件路径转换为HTTP URL
+		reportFileName := filepath.Base(reportPath)
+		reportURL := "http://localhost:8080/reports/" + reportFileName
+		s.sendLog("REPORT_URL:" + reportURL)
 
 		s.sendLog("所有文件审核完成！")
 	}()
@@ -608,11 +612,11 @@ func (s *Server) handleOnlineReview(w http.ResponseWriter, r *http.Request) {
 		absPath, _ := filepath.Abs(reportPath)
 		s.sendLog("✅ 报告已生成: %s", absPath)
 
-		// 自动打开浏览器
-		if s.cfg.Report.AutoOpen {
-			s.sendLog("正在打开浏览器...")
-			report.OpenInBrowser(reportPath)
-		}
+		// 发送报告URL到前端，由前端打开
+		// 将文件路径转换为HTTP URL
+		reportFileName := filepath.Base(reportPath)
+		reportURL := "http://localhost:8080/reports/" + reportFileName
+		s.sendLog("REPORT_URL:" + reportURL)
 
 		s.sendLog("所有文件审核完成！")
 	}()
