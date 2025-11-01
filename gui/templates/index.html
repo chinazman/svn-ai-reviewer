@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVN 代码审核工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .file-list {
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .file-item {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+        .file-item:hover {
+            background: #f8f9fa;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-M { background: #fff3cd; color: #856404; }
+        .status-A { background: #d4edda; color: #155724; }
+        .status-D { background: #f8d7da; color: #721c24; }
+        .status-Q { background: #d1ecf1; color: #0c5460; }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .select-all {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 SVN 代码审核工具</h1>
+            <p>基于 AI 的智能代码审核系统</p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <div class="section-title">📁 配置文件</div>
+                <div class="input-group">
+                    <input type="text" id="configPath" value="config.yaml" placeholder="配置文件路径">
+                    <button onclick="loadConfig()">加载配置</button>
+                </div>
+                <div id="configInfo"></div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📂 工作目录</div>
+                <div class="input-group">
+                    <input type="text" id="workDir" value="." placeholder="SVN 工作目录">
+                    <button onclick="scanChanges()">扫描变更</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📝 变更文件列表</div>
+                <div class="file-list" id="fileList">
+                    <div class="empty-state">请先扫描 SVN 变更</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <button id="reviewBtn" onclick="startReview()" disabled style="width: 100%; padding: 15px; font-size: 16px;">
+                    开始审核
+                </button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📋 执行日志</div>
+                <div class="log-area" id="logArea">等待操作...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let files = [];
+        let selectedIndices = new Set();
+
+        // 从 localStorage 加载工作目录
+        function loadWorkDir() {
+            const savedWorkDir = localStorage.getItem('svn_work_dir');
+            if (savedWorkDir) {
+                document.getElementById('workDir').value = savedWorkDir;
+            }
+        }
+
+        // 保存工作目录到 localStorage
+        function saveWorkDir(workDir) {
+            localStorage.setItem('svn_work_dir', workDir);
+        }
+
+        function log(message) {
+            const logArea = document.getElementById('logArea');
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.textContent += `[${timestamp}] ${message}\n`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        async function loadConfig() {
+            const configPath = document.getElementById('configPath').value;
+            log('正在加载配置...');
+            
+            try {
+                const response = await fetch('/api/load-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config_path: configPath })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('加载配置失败: ' + data.error);
+                } else {
+                    log('✅ 配置加载成功');
+                    log(`   Provider: ${data.config.provider}`);
+                    log(`   Model: ${data.config.model}`);
+                    document.getElementById('configInfo').innerHTML = 
+                        `<div class="info-box">✅ 已加载配置 - Provider: ${data.config.provider}, Model: ${data.config.model}</div>`;
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+                alert('请求失败: ' + error.message);
+            }
+        }
+
+        async function scanChanges() {
+            const workDir = document.getElementById('workDir').value;
+            // 保存工作目录
+            saveWorkDir(workDir);
+            
+            log('正在扫描 SVN 变更...');
+            
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ work_dir: workDir })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('扫描失败: ' + data.error);
+                } else {
+                    files = data.files;
+                    selectedIndices = new Set(files.map(f => f.index));
+                    renderFileList();
+                    log(`✅ 检测到 ${files.length} 个变更文件`);
+                    document.getElementById('reviewBtn').disabled = false;
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+                alert('请求失败: ' + error.message);
+            }
+        }
+
+        function renderFileList() {
+            const fileList = document.getElementById('fileList');
+            if (files.length === 0) {
+                fileList.innerHTML = '<div class="empty-state">没有检测到变更文件</div>';
+                return;
+            }
+
+            // 检查是否全选
+            const allSelected = files.every(f => selectedIndices.has(f.index));
+            
+            let html = `<div class="select-all"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" ${allSelected ? 'checked' : ''}> <label for="selectAll">全选</label></div>`;
+            files.forEach(file => {
+                const statusClass = `status-${file.status}`;
+                const statusText = getStatusText(file.status);
+                const checked = selectedIndices.has(file.index) ? 'checked' : '';
+                html += `
+                    <div class="file-item">
+                        <input type="checkbox" ${checked} onchange="toggleFile(${file.index})" id="file-${file.index}">
+                        <span class="file-status ${statusClass}">${statusText}</span>
+                        <span>${file.path}</span>
+                    </div>
+                `;
+            });
+            fileList.innerHTML = html;
+        }
+
+        function getStatusText(status) {
+            const map = { 'M': '修改', 'A': '新增', 'D': '删除', '?': '未受控' };
+            return map[status] || status;
+        }
+
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked;
+            if (checked) {
+                selectedIndices = new Set(files.map(f => f.index));
+            } else {
+                selectedIndices.clear();
+            }
+            renderFileList();
+        }
+
+        function toggleFile(index) {
+            if (selectedIndices.has(index)) {
+                selectedIndices.delete(index);
+            } else {
+                selectedIndices.add(index);
+            }
+            // 更新全选复选框状态
+            updateSelectAllCheckbox();
+        }
+
+        function updateSelectAllCheckbox() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            if (selectAllCheckbox) {
+                const allSelected = files.every(f => selectedIndices.has(f.index));
+                selectAllCheckbox.checked = allSelected;
+            }
+        }
+
+        async function startReview() {
+            if (selectedIndices.size === 0) {
+                alert('请至少选择一个文件');
+                return;
+            }
+
+            const workDir = document.getElementById('workDir').value;
+            // 保存工作目录
+            saveWorkDir(workDir);
+            
+            const reviewBtn = document.getElementById('reviewBtn');
+            reviewBtn.disabled = true;
+            reviewBtn.innerHTML = '<span class="loading"></span> 审核中...';
+            
+            log(`\n开始审核 ${selectedIndices.size} 个文件...`);
+            
+            try {
+                const response = await fetch('/api/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        work_dir: workDir,
+                        indices: Array.from(selectedIndices)
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('审核失败: ' + data.error);
+                } else {
+                    log('✅ 审核完成！');
+                    log(`📄 报告已生成: ${data.report_path}`);
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+                alert('请求失败: ' + error.message);
+            } finally {
+                reviewBtn.disabled = false;
+                reviewBtn.textContent = '开始审核';
+            }
+        }
+
+        // 页面加载时自动加载配置和工作目录
+        window.onload = () => {
+            loadWorkDir();
+            loadConfig();
+        };
+    </script>
+</body>
+</html>

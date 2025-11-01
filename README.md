@@ -1,14 +1,17 @@
 # SVN 代码审核工具
 
-一个基于 AI 的 SVN 代码变更审核工具，支持自动检测变更并提供改进建议。
+一个基于 AI 的 SVN 代码变更审核工具，支持自动检测变更并提供改进建议。提供图形界面和命令行两种使用方式。
 
 ## 功能特性
 
+- ✅ Web 图形界面（GUI）和命令行（CLI）双模式
+- ✅ 无需安装额外依赖，纯 Go 实现
 - ✅ 自动扫描 SVN 工作目录的变更文件（包括新增、修改、删除）
 - ✅ 支持选择多个文件进行审核
 - ✅ 集成 AI 模型进行智能代码审核
 - ✅ 支持 OpenAI 协议的模型（OpenAI、DeepSeek 等）
 - ✅ 可配置的审核规则和系统提示词
+- ✅ 生成 HTML 格式的审核报告
 - ✅ 易于扩展其他 AI 协议
 
 ## 安装
@@ -20,9 +23,21 @@
 
 ### 构建
 
+Windows:
 ```bash
-go mod download
+build.bat
+```
+
+或手动构建：
+```bash
+go mod tidy
 go build -o svn-reviewer.exe
+```
+
+Linux/Mac:
+```bash
+go mod tidy
+go build -o svn-reviewer
 ```
 
 ## 配置
@@ -48,7 +63,27 @@ svn:
 
 ## 使用方法
 
-### 基本用法
+### Web GUI 模式（推荐）
+
+直接双击 `svn-reviewer.exe` 启动 Web 界面，程序会自动在浏览器中打开 `http://localhost:8080`：
+
+1. 自动加载配置文件（默认 config.yaml）
+2. 输入 SVN 工作目录（默认当前目录）
+3. 点击"扫描变更"按钮
+4. 在文件列表中选择要审核的文件（默认全选）
+5. 点击"开始审核"按钮
+6. 等待审核完成，自动生成并打开 HTML 报告
+
+界面特点：
+- 🎨 现代化的渐变色设计
+- 📱 响应式布局，支持各种屏幕尺寸
+- 🔄 实时日志输出
+- ✅ 文件状态标识（新增/修改/删除）
+- 🚀 一键操作，简单易用
+
+### CLI 模式
+
+#### 基本用法
 
 审核当前目录的所有变更：
 
@@ -56,25 +91,25 @@ svn:
 svn-reviewer review
 ```
 
-### 指定工作目录
+#### 指定工作目录
 
 ```bash
 svn-reviewer review -d /path/to/svn/repo
 ```
 
-### 选择特定文件审核
+#### 选择特定文件审核
 
 ```bash
 svn-reviewer review -f file1.go,file2.go
 ```
 
-### 交互式选择文件
+#### 交互式选择文件
 
 ```bash
 svn-reviewer review -i
 ```
 
-### 使用自定义配置文件
+#### 使用自定义配置文件
 
 ```bash
 svn-reviewer review --config custom-config.yaml
@@ -139,16 +174,22 @@ svn-code-reviewer/
 ├── cmd/                    # 命令行接口
 │   ├── root.go            # 根命令
 │   └── review.go          # 审核命令
+├── gui/                   # 图形界面
+│   └── app.go            # GUI 应用
 ├── internal/              # 内部包
 │   ├── ai/               # AI 客户端
 │   │   ├── client.go     # 客户端接口
-│   │   └── openai.go     # OpenAI 实现
+│   │   ├── openai.go     # OpenAI 实现
+│   │   └── types.go      # 类型定义
 │   ├── config/           # 配置管理
 │   │   └── config.go
+│   ├── report/           # 报告生成
+│   │   └── html.go
 │   └── svn/              # SVN 操作
 │       └── svn.go
 ├── main.go               # 程序入口
 ├── config.yaml           # 配置文件
+├── build.bat             # Windows 构建脚本
 └── go.mod               # Go 模块定义
 ```
 
