@@ -2,7 +2,7 @@
 
 ai:
   provider: "deepseek"
-  api_key: "sk-f903a95f3bec43018687aa5e2002ba04"
+  api_key: "your-qwen-api-key"
   base_url: "https://api.deepseek.com/v1"
   model: "deepseek-coder"
   temperature: 0.3
