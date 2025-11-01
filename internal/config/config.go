@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	AI           AIConfig  `yaml:"ai"`
-	ReviewPrompt string    `yaml:"review_prompt"`
-	SVN          SVNConfig `yaml:"svn"`
-	Ignore       []string  `yaml:"ignore"`
+	AI           AIConfig     `yaml:"ai"`
+	ReviewPrompt string       `yaml:"review_prompt"`
+	SVN          SVNConfig    `yaml:"svn"`
+	Ignore       []string     `yaml:"ignore"`
+	Report       ReportConfig `yaml:"report"`
 }
 
 type AIConfig struct {
@@ -24,6 +25,11 @@ type AIConfig struct {
 
 type SVNConfig struct {
 	Command string `yaml:"command"`
+}
+
+type ReportConfig struct {
+	OutputDir  string `yaml:"output_dir"`
+	AutoOpen   bool   `yaml:"auto_open"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -40,6 +46,9 @@ func LoadConfig(path string) (*Config, error) {
 	// 设置默认值
 	if cfg.SVN.Command == "" {
 		cfg.SVN.Command = "svn"
+	}
+	if cfg.Report.OutputDir == "" {
+		cfg.Report.OutputDir = "./reports"
 	}
 
 	return &cfg, nil

@@ -9,10 +9,11 @@ import (
 
 // ReviewResult AI 审核结果
 type ReviewResult struct {
-	FileName string
-	Content  string
-	Success  bool
-	Error    error
+	FileName   string
+	Content    string      // 原始返回内容
+	ReviewData *ReviewJSON // 解析后的 JSON 数据
+	Success    bool
+	Error      error
 }
 
 // Client AI 客户端接口

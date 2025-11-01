@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"svn-code-reviewer/internal/ai"
+	"svn-code-reviewer/internal/report"
 	"svn-code-reviewer/internal/svn"
 )
 
@@ -84,11 +86,25 @@ func runReview(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\n开始审核 %d 个文件...\n\n", len(filesToReview))
 	ctx := context.Background()
 
+	// 创建报告
+	htmlReport := &report.Report{
+		Title:       "SVN 代码审核报告",
+		GeneratedAt: time.Now(),
+		WorkDir:     workDir,
+		Reviews:     make([]report.FileReview, 0),
+	}
+
 	for i, change := range filesToReview {
 		fmt.Printf("[%d/%d] 正在审核: %s\n", i+1, len(filesToReview), change.Path)
 
+		fileReview := report.FileReview{
+			FileName: change.Path,
+			Status:   change.Status,
+		}
+
 		// 获取文件差异
 		var diff string
+		var skipReview bool
 		if change.Status == "D" {
 			// 删除的文件，只显示删除信息
 			diff = fmt.Sprintf("文件已删除: %s", change.Path)
@@ -97,6 +113,8 @@ func runReview(cmd *cobra.Command, args []string) error {
 			content, err := svnClient.GetFileContent(change.Path)
 			if err != nil {
 				fmt.Printf("  ⚠️  获取文件内容失败: %v\n\n", err)
+				fileReview.Error = err
+				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
 				continue
 			}
 			statusDesc := "新增文件"
@@ -109,17 +127,19 @@ func runReview(cmd *cobra.Command, args []string) error {
 			d, err := svnClient.GetFileDiff(change.Path)
 			if err != nil {
 				fmt.Printf("  ⚠️  获取文件差异失败: %v\n\n", err)
+				fileReview.Error = err
+				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
 				continue
 			}
 			if strings.TrimSpace(d) == "" {
 				fmt.Printf("  ℹ️  文件无差异内容\n\n")
-				continue
+				skipReview = true
 			}
 			diff = d
 		}
 
-		if strings.TrimSpace(diff) == "" {
-			fmt.Printf("  ℹ️  文件无差异内容\n\n")
+		if strings.TrimSpace(diff) == "" || skipReview {
+			fmt.Printf("  ℹ️  文件无差异内容，跳过审核\n\n")
 			continue
 		}
 
@@ -127,18 +147,34 @@ func runReview(cmd *cobra.Command, args []string) error {
 		result, err := aiClient.Review(ctx, change.Path, diff, cfg.ReviewPrompt)
 		if err != nil {
 			fmt.Printf("  ❌ 审核失败: %v\n\n", err)
-			continue
+			fileReview.Error = err
+		} else {
+			fmt.Printf("  ✅ 审核完成\n\n")
+			fileReview.Result = result
 		}
 
-		// 输出审核结果
-		fmt.Printf("  ✅ 审核完成\n")
-		fmt.Println("  " + strings.Repeat("-", 60))
-		fmt.Println(indentText(result.Content, "  "))
-		fmt.Println("  " + strings.Repeat("-", 60))
-		fmt.Println()
+		htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
 	}
 
-	fmt.Println("所有文件审核完成！")
+	// 生成 HTML 报告
+	fmt.Println("正在生成 HTML 报告...")
+	reportPath, err := report.GenerateHTML(htmlReport, cfg.Report.OutputDir)
+	if err != nil {
+		return fmt.Errorf("生成报告失败: %w", err)
+	}
+
+	fmt.Printf("✅ 报告已生成: %s\n", reportPath)
+
+	// 自动打开浏览器
+	if cfg.Report.AutoOpen {
+		fmt.Println("正在打开浏览器...")
+		if err := report.OpenInBrowser(reportPath); err != nil {
+			fmt.Printf("⚠️  自动打开浏览器失败: %v\n", err)
+			fmt.Printf("请手动打开: %s\n", reportPath)
+		}
+	}
+
+	fmt.Println("\n所有文件审核完成！")
 	return nil
 }
 

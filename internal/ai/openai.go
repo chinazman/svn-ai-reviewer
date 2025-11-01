@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"svn-code-reviewer/internal/config"
 )
@@ -196,9 +197,34 @@ func (c *OpenAIClient) Review(ctx context.Context, fileName, diff, systemPrompt 
 		}, fmt.Errorf(errMsg)
 	}
 
+	content := chatResp.Choices[0].Message.Content
+
+	// 尝试解析 JSON
+	var reviewData ReviewJSON
+	// 清理可能的 markdown 代码块标记
+	cleanContent := strings.TrimSpace(content)
+	cleanContent = strings.TrimPrefix(cleanContent, "```json")
+	cleanContent = strings.TrimPrefix(cleanContent, "```")
+	cleanContent = strings.TrimSuffix(cleanContent, "```")
+	cleanContent = strings.TrimSpace(cleanContent)
+
+	if err := json.Unmarshal([]byte(cleanContent), &reviewData); err != nil {
+		// JSON 解析失败，但仍然返回原始内容
+		fmt.Printf("  [警告] JSON 解析失败: %v\n", err)
+		fmt.Printf("  [警告] 原始内容: %s\n", cleanContent[:min(200, len(cleanContent))])
+	}
+
 	return &ReviewResult{
-		FileName: fileName,
-		Content:  chatResp.Choices[0].Message.Content,
-		Success:  true,
+		FileName:   fileName,
+		Content:    content,
+		ReviewData: &reviewData,
+		Success:    true,
 	}, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
