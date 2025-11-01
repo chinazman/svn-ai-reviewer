@@ -18,6 +18,8 @@ type FileReview struct {
 	Status   string
 	Result   *ai.ReviewResult
 	Error    error
+	Revision int    // SVN版本号（在线模式）
+	Diff     string // 变更内容
 }
 
 type Report struct {
@@ -51,6 +53,8 @@ type FileReviewData struct {
 	ScoreClass  string
 	IsHighRisk  bool
 	Issues      []IssueData
+	Revision    int    // SVN版本号
+	Diff        string // 变更内容
 }
 
 type IssueData struct {
@@ -177,6 +181,20 @@ func generateHTMLContent(report *Report) string {
         }
         .toggle-all-btn:hover {
             background: #5568d3;
+        }
+        .view-diff-btn {
+            padding: 6px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.3s ease;
+        }
+        .view-diff-btn:hover {
+            background: #218838;
         }
         .content {
             padding: 30px;
@@ -364,6 +382,67 @@ func generateHTMLContent(report *Report) string {
             font-size: 14px;
             border-top: 1px solid #e9ecef;
         }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .modal-close {
+            padding: 8px 16px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .modal-close:hover {
+            background: #5a6268;
+        }
+        .diff-content {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 70vh;
+            font-family: "Courier New", monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
     </style>
 </head>
 <body>
@@ -403,8 +482,8 @@ func generateHTMLContent(report *Report) string {
 
 		sb.WriteString(`
                 <div class="file-item` + highRiskClass + `" id="file-` + fmt.Sprintf("%d", i) + `">
-                    <div class="file-header" onclick="toggleFile(` + fmt.Sprintf("%d", i) + `)">
-                        <div class="file-info">
+                    <div class="file-header">
+                        <div class="file-info" onclick="toggleFile(` + fmt.Sprintf("%d", i) + `)">
                             <span class="file-name">` + html.EscapeString(fileData.FileName) + `</span>
                             <div class="file-badges">
                                 <span class="status-badge status-` + fileData.StatusClass + `">` + fileData.StatusText + `</span>`)
@@ -422,7 +501,10 @@ func generateHTMLContent(report *Report) string {
 		sb.WriteString(`
                             </div>
                         </div>
-                        <span class="expand-icon">▶</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="view-diff-btn" onclick="event.stopPropagation(); viewDiff(` + fmt.Sprintf("%d", i) + `)">查看变更</button>
+                            <span class="expand-icon" onclick="toggleFile(` + fmt.Sprintf("%d", i) + `)">▶</span>
+                        </div>
                     </div>
                     <div class="file-body">`)
 
@@ -476,8 +558,23 @@ func generateHTMLContent(report *Report) string {
             由 SVN 代码审核工具生成
         </div>
     </div>
+    
+    <!-- 变更查看模态框 -->
+    <div class="modal" id="diffModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">查看变更</div>
+                <button class="modal-close" onclick="closeModal()">关闭</button>
+            </div>
+            <div class="diff-content" id="diffContent">加载中...</div>
+        </div>
+    </div>
+    
     <script>
         let allExpanded = false;
+        
+        // 文件变更数据
+        const fileData = ` + generateFileDataJSON(data.Reviews) + `;
 
         function toggleFile(index) {
             const fileItem = document.getElementById('file-' + index);
@@ -500,6 +597,35 @@ func generateHTMLContent(report *Report) string {
             
             btn.textContent = allExpanded ? '全部收起' : '全部展开';
         }
+        
+        function viewDiff(index) {
+            const file = fileData[index];
+            const modal = document.getElementById('diffModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const diffContent = document.getElementById('diffContent');
+            
+            modalTitle.textContent = file.fileName;
+            
+            if (file.diff) {
+                diffContent.textContent = file.diff;
+            } else {
+                diffContent.textContent = '暂无变更内容';
+            }
+            
+            modal.classList.add('show');
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('diffModal');
+            modal.classList.remove('show');
+        }
+        
+        // 点击模态框背景关闭
+        document.getElementById('diffModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
     </script>
 </body>
 </html>`)
@@ -525,6 +651,8 @@ func prepareTemplateData(report *Report) *TemplateData {
 			Status:      review.Status,
 			StatusClass: getStatusClass(review.Status),
 			StatusText:  getStatusText(review.Status),
+			Revision:    review.Revision,
+			Diff:        review.Diff,
 		}
 
 		if review.Error != nil {
@@ -640,6 +768,35 @@ func getStatusText(status string) string {
 	default:
 		return status
 	}
+}
+
+func generateFileDataJSON(reviews []FileReviewData) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+	
+	for i, review := range reviews {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		
+		sb.WriteString("{")
+		sb.WriteString(`"fileName":"` + escapeJSON(review.FileName) + `",`)
+		sb.WriteString(`"status":"` + review.Status + `",`)
+		sb.WriteString(`"diff":"` + escapeJSON(review.Diff) + `"`)
+		sb.WriteString("}")
+	}
+	
+	sb.WriteString("]")
+	return sb.String()
+}
+
+func escapeJSON(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	return s
 }
 
 

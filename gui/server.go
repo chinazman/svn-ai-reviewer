@@ -267,6 +267,9 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			// 保存 diff 内容到报告
+			fileReview.Diff = diff
+
 			result, err := aiClient.Review(ctx, change.Path, diff, s.cfg.ReviewPrompt)
 			if err != nil {
 				s.sendLog("  ❌ 审核失败: %v", err)
@@ -535,6 +538,7 @@ func (s *Server) handleOnlineReview(w http.ResponseWriter, r *http.Request) {
 			fileReview := report.FileReview{
 				FileName: fmt.Sprintf("%s (r%d)", file.Path, file.Revision),
 				Status:   file.Status,
+				Revision: file.Revision,
 			}
 
 			// 删除的文件直接跳过
@@ -588,6 +592,9 @@ func (s *Server) handleOnlineReview(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+
+			// 保存 diff 内容到报告
+			fileReview.Diff = diff
 
 			result, err := aiClient.Review(ctx, file.Path, diff, s.cfg.ReviewPrompt)
 			if err != nil {
