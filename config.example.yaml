@@ -40,12 +40,10 @@ review_prompt: |
         "description": "问题详细描述",
         "suggestion": "改进建议"
       }
-    ],
-    "strengths": ["优点1", "优点2"],
-    "recommendations": ["建议1", "建议2"]
+    ]
   }
   
-  注意：只输出 JSON，不要包含任何其他文字。score 为 0-100 的评分。
+  注意：只输出 JSON，不要包含任何其他文字。score 为 0-100 的评分。如果没有问题，issues 为空数组。
 
 # SVN 配置
 svn:

@@ -2,11 +2,9 @@ package ai
 
 // ReviewJSON AI 返回的 JSON 结构
 type ReviewJSON struct {
-	Summary         string   `json:"summary"`
-	Score           int      `json:"score"`
-	Issues          []Issue  `json:"issues"`
-	Strengths       []string `json:"strengths"`
-	Recommendations []string `json:"recommendations"`
+	Summary string  `json:"summary"`
+	Score   int     `json:"score"`
+	Issues  []Issue `json:"issues"`
 }
 
 // Issue 代码问题

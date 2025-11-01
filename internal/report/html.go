@@ -49,9 +49,8 @@ type FileReviewData struct {
 	Summary     string
 	Score       int
 	ScoreClass  string
+	IsHighRisk  bool
 	Issues      []IssueData
-	Strengths   []string
-	Suggestions []string
 }
 
 type IssueData struct {
@@ -151,36 +150,89 @@ func generateHTMLContent(report *Report) string {
             padding: 20px 30px;
             background: #f8f9fa;
             border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .summary-stats {
+            display: flex;
+            gap: 30px;
         }
         .summary-item {
-            display: inline-block;
-            margin-right: 30px;
             font-size: 14px;
         }
         .summary-item strong {
             color: #667eea;
         }
+        .toggle-all-btn {
+            padding: 8px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s ease;
+        }
+        .toggle-all-btn:hover {
+            background: #5568d3;
+        }
         .content {
             padding: 30px;
         }
-        .file-review {
-            margin-bottom: 30px;
+        .file-list {
+            margin-bottom: 20px;
+        }
+        .file-item {
+            background: white;
             border: 1px solid #e9ecef;
             border-radius: 6px;
+            margin-bottom: 10px;
             overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .file-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .file-item.high-risk {
+            border-left: 4px solid #dc3545;
         }
         .file-header {
             background: #f8f9fa;
             padding: 15px 20px;
-            border-bottom: 1px solid #e9ecef;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .file-header:hover {
+            background: #e9ecef;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
         }
         .file-name {
             font-weight: 600;
-            font-size: 16px;
+            font-size: 15px;
             color: #2c3e50;
+        }
+        .file-badges {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .expand-icon {
+            font-size: 20px;
+            color: #6c757d;
+            transition: transform 0.3s ease;
+        }
+        .file-item.expanded .expand-icon {
+            transform: rotate(90deg);
         }
         .status-badge {
             display: inline-block;
@@ -195,6 +247,12 @@ func generateHTMLContent(report *Report) string {
         .status-untracked { background: #d1ecf1; color: #0c5460; }
         .file-body {
             padding: 20px;
+            display: none;
+            border-top: 1px solid #e9ecef;
+            background: white;
+        }
+        .file-item.expanded .file-body {
+            display: block;
         }
         .review-content {
             line-height: 1.8;
@@ -249,15 +307,23 @@ func generateHTMLContent(report *Report) string {
         }
         .score-badge {
             display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 18px;
-            font-weight: bold;
-            margin-left: 10px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
         }
         .score-high { background: #d4edda; color: #155724; }
         .score-medium { background: #fff3cd; color: #856404; }
         .score-low { background: #f8d7da; color: #721c24; }
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #f8d7da;
+            color: #721c24;
+        }
         .issue-item {
             margin-bottom: 20px;
             padding: 15px;
@@ -310,103 +376,131 @@ func generateHTMLContent(report *Report) string {
             </div>
         </div>
         <div class="summary">
-            <span class="summary-item"><strong>总文件数:</strong> ` + fmt.Sprintf("%d", data.TotalFiles) + `</span>
-            <span class="summary-item"><strong>审核成功:</strong> ` + fmt.Sprintf("%d", data.SuccessCount) + `</span>
-            <span class="summary-item"><strong>审核失败:</strong> ` + fmt.Sprintf("%d", data.ErrorCount) + `</span>`)
+            <div class="summary-stats">
+                <span class="summary-item"><strong>总文件数:</strong> ` + fmt.Sprintf("%d", data.TotalFiles) + `</span>
+                <span class="summary-item"><strong>审核成功:</strong> ` + fmt.Sprintf("%d", data.SuccessCount) + `</span>
+                <span class="summary-item"><strong>审核失败:</strong> ` + fmt.Sprintf("%d", data.ErrorCount) + `</span>`)
 
 	if data.AvgScore > 0 {
 		sb.WriteString(`
-            <span class="summary-item"><strong>平均评分:</strong> ` + fmt.Sprintf("%d", data.AvgScore) + `</span>`)
+                <span class="summary-item"><strong>平均评分:</strong> ` + fmt.Sprintf("%d", data.AvgScore) + `</span>`)
 	}
 
 	sb.WriteString(`
+            </div>
+            <button class="toggle-all-btn" onclick="toggleAll()">全部展开</button>
         </div>
         <div class="content">
+            <div class="file-list">
 `)
 
-	// 渲染每个文件的审核结果
-	for _, fileData := range data.Reviews {
-		sb.WriteString(`
-            <div class="file-review">
-                <div class="file-header">
-                    <span class="file-name">` + html.EscapeString(fileData.FileName) + `</span>
-                    <div>
-                        <span class="status-badge status-` + fileData.StatusClass + `">` + fileData.StatusText + `</span>`)
-
-		if fileData.HasReview && fileData.Score > 0 {
-			sb.WriteString(`
-                        <span class="score-badge score-` + fileData.ScoreClass + `">` + fmt.Sprintf("%d分", fileData.Score) + `</span>`)
+	// 渲染文件列表
+	for i, fileData := range data.Reviews {
+		highRiskClass := ""
+		if fileData.IsHighRisk {
+			highRiskClass = " high-risk"
 		}
 
 		sb.WriteString(`
+                <div class="file-item` + highRiskClass + `" id="file-` + fmt.Sprintf("%d", i) + `">
+                    <div class="file-header" onclick="toggleFile(` + fmt.Sprintf("%d", i) + `)">
+                        <div class="file-info">
+                            <span class="file-name">` + html.EscapeString(fileData.FileName) + `</span>
+                            <div class="file-badges">
+                                <span class="status-badge status-` + fileData.StatusClass + `">` + fileData.StatusText + `</span>`)
+
+		if fileData.IsHighRisk {
+			sb.WriteString(`
+                                <span class="risk-badge">⚠️ 高风险</span>`)
+		}
+
+		if fileData.HasReview && fileData.Score > 0 {
+			sb.WriteString(`
+                                <span class="score-badge score-` + fileData.ScoreClass + `">` + fmt.Sprintf("%d分", fileData.Score) + `</span>`)
+		}
+
+		sb.WriteString(`
+                            </div>
+                        </div>
+                        <span class="expand-icon">▶</span>
                     </div>
-                </div>
-                <div class="file-body">`)
+                    <div class="file-body">`)
 
 		if fileData.HasError {
 			sb.WriteString(`
-                    <div class="error-message">
-                        <span class="error-icon">❌</span>
-                        <strong>审核失败:</strong> ` + html.EscapeString(fileData.ErrorMsg) + `
-                    </div>`)
+                        <div class="error-message">
+                            <span class="error-icon">❌</span>
+                            <strong>审核失败:</strong> ` + html.EscapeString(fileData.ErrorMsg) + `
+                        </div>`)
 		} else if fileData.HasReview {
 			// 总结
 			if fileData.Summary != "" {
 				sb.WriteString(`
-                    <div class="review-content">
-                        <p><strong>📝 总结:</strong> ` + html.EscapeString(fileData.Summary) + `</p>
-                    </div>`)
+                        <div class="review-content">
+                            <p><strong>📝 总结:</strong> ` + html.EscapeString(fileData.Summary) + `</p>
+                        </div>`)
 			}
 
 			// 问题列表
 			if len(fileData.Issues) > 0 {
 				sb.WriteString(`
-                    <div class="section-title">⚠️ 发现的问题 (` + fmt.Sprintf("%d", len(fileData.Issues)) + `)</div>`)
+                        <div class="section-title">⚠️ 发现的问题 (` + fmt.Sprintf("%d", len(fileData.Issues)) + `)</div>`)
 				for _, issue := range fileData.Issues {
 					sb.WriteString(`
-                    <div class="issue-item severity-` + issue.Severity + `">
-                        <div class="issue-title">
-                            <span class="status-badge status-` + issue.SeverityClass + `">` + issue.SeverityText + `</span>
-                            ` + html.EscapeString(issue.Title) + `
-                        </div>
-                        <div class="issue-desc">` + html.EscapeString(issue.Description) + `</div>
-                        <div class="issue-suggestion">💡 建议: ` + html.EscapeString(issue.Suggestion) + `</div>
-                    </div>`)
+                        <div class="issue-item severity-` + issue.Severity + `">
+                            <div class="issue-title">
+                                <span class="status-badge status-` + issue.SeverityClass + `">` + issue.SeverityText + `</span>
+                                ` + html.EscapeString(issue.Title) + `
+                            </div>
+                            <div class="issue-desc">` + html.EscapeString(issue.Description) + `</div>
+                            <div class="issue-suggestion">💡 建议: ` + html.EscapeString(issue.Suggestion) + `</div>
+                        </div>`)
 				}
-			}
-
-			// 优点
-			if len(fileData.Strengths) > 0 {
+			} else {
 				sb.WriteString(`
-                    <div class="section-title">✨ 代码优点</div>`)
-				for _, strength := range fileData.Strengths {
-					sb.WriteString(`
-                    <div class="list-item">✓ ` + html.EscapeString(strength) + `</div>`)
-				}
-			}
-
-			// 建议
-			if len(fileData.Suggestions) > 0 {
-				sb.WriteString(`
-                    <div class="section-title">💡 改进建议</div>`)
-				for _, suggestion := range fileData.Suggestions {
-					sb.WriteString(`
-                    <div class="list-item">• ` + html.EscapeString(suggestion) + `</div>`)
-				}
+                        <div class="review-content">
+                            <p style="color: #28a745;">✅ 未发现明显问题</p>
+                        </div>`)
 			}
 		}
 
 		sb.WriteString(`
-                </div>
-            </div>`)
+                    </div>
+                </div>`)
 	}
 
 	sb.WriteString(`
+            </div>
         </div>
         <div class="footer">
             由 SVN 代码审核工具生成
         </div>
     </div>
+    <script>
+        let allExpanded = false;
+
+        function toggleFile(index) {
+            const fileItem = document.getElementById('file-' + index);
+            fileItem.classList.toggle('expanded');
+        }
+
+        function toggleAll() {
+            const fileItems = document.querySelectorAll('.file-item');
+            const btn = document.querySelector('.toggle-all-btn');
+            
+            allExpanded = !allExpanded;
+            
+            fileItems.forEach(item => {
+                if (allExpanded) {
+                    item.classList.add('expanded');
+                } else {
+                    item.classList.remove('expanded');
+                }
+            });
+            
+            btn.textContent = allExpanded ? '全部收起' : '全部展开';
+        }
+    </script>
 </body>
 </html>`)
 
@@ -446,8 +540,6 @@ func prepareTemplateData(report *Report) *TemplateData {
 				fileData.Summary = rd.Summary
 				fileData.Score = rd.Score
 				fileData.ScoreClass = getScoreClass(rd.Score)
-				fileData.Strengths = rd.Strengths
-				fileData.Suggestions = rd.Recommendations
 
 				if rd.Score > 0 {
 					totalScore += rd.Score
@@ -455,7 +547,11 @@ func prepareTemplateData(report *Report) *TemplateData {
 				}
 
 				// 转换问题列表
+				hasHighSeverity := false
 				for _, issue := range rd.Issues {
+					if issue.Severity == "high" {
+						hasHighSeverity = true
+					}
 					fileData.Issues = append(fileData.Issues, IssueData{
 						Severity:      issue.Severity,
 						SeverityClass: getSeverityClass(issue.Severity),
@@ -465,6 +561,9 @@ func prepareTemplateData(report *Report) *TemplateData {
 						Suggestion:    issue.Suggestion,
 					})
 				}
+
+				// 判断是否高风险：分数低于60或有高严重性问题
+				fileData.IsHighRisk = rd.Score < 60 || hasHighSeverity
 			}
 		}
 
