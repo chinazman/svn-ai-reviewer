@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVN 在线审核工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+        }
+        .mode-switch {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .mode-btn {
+            padding: 8px 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .mode-btn.active {
+            background: white;
+            color: #667eea;
+        }
+        .content {
+            padding: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .table-container {
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            position: sticky;
+            top: 0;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .file-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-M { background: #fff3cd; color: #856404; }
+        .status-A { background: #d4edda; color: #155724; }
+        .status-D { background: #f8d7da; color: #721c24; }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+        .revision-cell {
+            width: 80px;
+        }
+        .author-cell {
+            width: 120px;
+        }
+        .date-cell {
+            width: 180px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 SVN 在线审核工具</h1>
+            <p>连接SVN服务器，审核历史版本</p>
+            <div class="mode-switch">
+                <button class="mode-btn" onclick="window.location.href='/'">本地模式</button>
+                <button class="mode-btn active">在线模式</button>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <div class="section-title">📁 配置文件</div>
+                <div class="input-group">
+                    <input type="text" id="configPath" value="config.yaml" placeholder="配置文件路径">
+                    <button onclick="loadConfig()">加载配置</button>
+                </div>
+                <div id="configInfo"></div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">🔗 SVN 服务器连接</div>
+                <div class="input-group">
+                    <input type="text" id="svnURL" placeholder="SVN 服务器地址 (例如: https://svn.example.com/repo 或 file:///F:/path/to/repo)">
+                </div>
+                <div class="input-group">
+                    <input type="text" id="svnUsername" placeholder="用户名 (file:// 协议可留空)">
+                    <input type="password" id="svnPassword" placeholder="密码 (file:// 协议可留空)">
+                </div>
+                <div class="input-group">
+                    <label><input type="checkbox" id="saveCredentials"> 记住配置</label>
+                    <button onclick="connectSVN()">连接服务器</button>
+                </div>
+                <div id="connectionInfo"></div>
+            </div>
+
+            <div class="section" id="searchSection" style="display:none;">
+                <div class="section-title">🔍 搜索提交记录</div>
+                <div class="input-group">
+                    <input type="text" id="searchPath" placeholder="目录路径 (默认根目录)">
+                    <input type="text" id="searchKeyword" placeholder="关键词">
+                    <input type="text" id="searchAuthor" placeholder="作者">
+                    <button onclick="searchLogs()">搜索</button>
+                </div>
+            </div>
+
+            <div class="section" id="logsSection" style="display:none;">
+                <div class="section-title">📋 提交记录 (点击选择版本)</div>
+                <div class="table-container">
+                    <table id="logsTable">
+                        <thead>
+                            <tr>
+                                <th class="checkbox-cell"><input type="checkbox" id="selectAllLogs" onchange="toggleSelectAllLogs()"></th>
+                                <th class="revision-cell">版本</th>
+                                <th class="author-cell">作者</th>
+                                <th class="date-cell">日期</th>
+                                <th>提交信息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination">
+                    <button onclick="loadPrevious()" id="prevBtn" disabled>上100条</button>
+                    <button onclick="loadNext()" id="nextBtn" disabled>下100条</button>
+                    <button onclick="loadSelectedFiles()">加载选中版本的文件</button>
+                </div>
+            </div>
+
+            <div class="section" id="filesSection" style="display:none;">
+                <div class="section-title">📝 变更文件列表</div>
+                <div class="table-container">
+                    <table id="filesTable">
+                        <thead>
+                            <tr>
+                                <th class="checkbox-cell"><input type="checkbox" id="selectAllFiles" onchange="toggleSelectAllFiles()"></th>
+                                <th class="revision-cell">版本</th>
+                                <th>状态</th>
+                                <th>文件路径</th>
+                            </tr>
+                        </thead>
+                        <tbody id="filesBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section" id="reviewSection" style="display:none;">
+                <button id="reviewBtn" onclick="startReview()" style="width: 100%; padding: 15px; font-size: 16px;">
+                    开始审核
+                </button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📋 执行日志</div>
+                <div class="log-area" id="logArea">等待操作...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let logs = [];
+        let files = [];
+        let selectedLogIndices = new Set();
+        let selectedFileIndices = new Set();
+        let currentOffset = 0;
+        const limit = 100;
+
+        function log(message) {
+            const logArea = document.getElementById('logArea');
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.textContent += `[${timestamp}] ${message}\n`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        async function loadConfig() {
+            const configPath = document.getElementById('configPath').value;
+            log('正在加载配置...');
+            
+            try {
+                const response = await fetch('/api/load-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config_path: configPath })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('加载配置失败: ' + data.error);
+                } else {
+                    log('✅ 配置加载成功');
+                    document.getElementById('configInfo').innerHTML = 
+                        `<div class="info-box">✅ 已加载配置 - Provider: ${data.config.provider}, Model: ${data.config.model}</div>`;
+                    
+                    // 尝试加载保存的SVN凭据
+                    loadSavedCredentials();
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+            }
+        }
+
+        function loadSavedCredentials() {
+            const url = localStorage.getItem('svn_url');
+            const username = localStorage.getItem('svn_username');
+            const password = localStorage.getItem('svn_password');
+            
+            if (url) document.getElementById('svnURL').value = url;
+            if (username) document.getElementById('svnUsername').value = username;
+            if (password) document.getElementById('svnPassword').value = password;
+            if (url && username && password) {
+                document.getElementById('saveCredentials').checked = true;
+            }
+        }
+
+        async function connectSVN() {
+            const url = document.getElementById('svnURL').value;
+            const username = document.getElementById('svnUsername').value;
+            const password = document.getElementById('svnPassword').value;
+            const save = document.getElementById('saveCredentials').checked;
+            
+            if (!url) {
+                alert('请填写SVN服务器地址');
+                return;
+            }
+            
+            // 如果不是file://协议，建议填写用户名密码
+            if (!url.startsWith('file://') && !username) {
+                if (!confirm('未填写用户名，是否继续连接？\n(file:// 协议不需要用户名密码)')) {
+                    return;
+                }
+            }
+            
+            log('正在连接SVN服务器...');
+            
+            try {
+                const response = await fetch('/api/online/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, username, password, save })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('连接失败: ' + data.error);
+                } else {
+                    log('✅ SVN服务器连接成功');
+                    document.getElementById('connectionInfo').innerHTML = 
+                        `<div class="info-box">✅ 已连接到: ${url}</div>`;
+                    document.getElementById('searchSection').style.display = 'block';
+                    
+                    if (save) {
+                        localStorage.setItem('svn_url', url);
+                        localStorage.setItem('svn_username', username);
+                        localStorage.setItem('svn_password', password);
+                    }
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+            }
+        }
+
+        async function searchLogs() {
+            const path = document.getElementById('searchPath').value;
+            const keyword = document.getElementById('searchKeyword').value;
+            const author = document.getElementById('searchAuthor').value;
+            
+            log('正在搜索提交记录...');
+            
+            try {
+                const response = await fetch('/api/online/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path, keyword, author, limit, offset: currentOffset })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('搜索失败: ' + data.error);
+                } else {
+                    logs = data.logs;
+                    selectedLogIndices.clear();
+                    renderLogs();
+                    log(`✅ 找到 ${logs.length} 条提交记录`);
+                    document.getElementById('logsSection').style.display = 'block';
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+            }
+        }
+
+        function renderLogs() {
+            const tbody = document.getElementById('logsBody');
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">没有找到提交记录</td></tr>';
+                return;
+            }
+
+            let html = '';
+            logs.forEach(log => {
+                const checked = selectedLogIndices.has(log.index) ? 'checked' : '';
+                const message = log.message.replace(/\n/g, ' ').substring(0, 100);
+                html += `
+                    <tr>
+                        <td class="checkbox-cell"><input type="checkbox" ${checked} onchange="toggleLog(${log.index})"></td>
+                        <td class="revision-cell">r${log.revision}</td>
+                        <td class="author-cell">${log.author}</td>
+                        <td class="date-cell">${log.date.substring(0, 19)}</td>
+                        <td>${message}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function toggleSelectAllLogs() {
+            const checked = document.getElementById('selectAllLogs').checked;
+            if (checked) {
+                selectedLogIndices = new Set(logs.map(l => l.index));
+            } else {
+                selectedLogIndices.clear();
+            }
+            renderLogs();
+        }
+
+        function toggleLog(index) {
+            if (selectedLogIndices.has(index)) {
+                selectedLogIndices.delete(index);
+            } else {
+                selectedLogIndices.add(index);
+            }
+        }
+
+        async function loadSelectedFiles() {
+            if (selectedLogIndices.size === 0) {
+                alert('请至少选择一个版本');
+                return;
+            }
+
+            const revisions = Array.from(selectedLogIndices).map(i => logs[i].revision);
+            log(`正在加载 ${revisions.length} 个版本的文件...`);
+            
+            try {
+                const response = await fetch('/api/online/files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ revisions })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('加载文件失败: ' + data.error);
+                } else {
+                    files = data.files;
+                    selectedFileIndices = new Set(files.map(f => f.index));
+                    renderFiles();
+                    log(`✅ 检测到 ${files.length} 个变更文件`);
+                    document.getElementById('filesSection').style.display = 'block';
+                    document.getElementById('reviewSection').style.display = 'block';
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+            }
+        }
+
+        function renderFiles() {
+            const tbody = document.getElementById('filesBody');
+            if (files.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">没有变更文件</td></tr>';
+                return;
+            }
+
+            let html = '';
+            files.forEach(file => {
+                const checked = selectedFileIndices.has(file.index) ? 'checked' : '';
+                const statusClass = `status-${file.status}`;
+                const statusText = getStatusText(file.status);
+                html += `
+                    <tr>
+                        <td class="checkbox-cell"><input type="checkbox" ${checked} onchange="toggleFile(${file.index})"></td>
+                        <td class="revision-cell">r${file.revision}</td>
+                        <td><span class="file-status ${statusClass}">${statusText}</span></td>
+                        <td>${file.path}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function toggleSelectAllFiles() {
+            const checked = document.getElementById('selectAllFiles').checked;
+            if (checked) {
+                selectedFileIndices = new Set(files.map(f => f.index));
+            } else {
+                selectedFileIndices.clear();
+            }
+            renderFiles();
+        }
+
+        function toggleFile(index) {
+            if (selectedFileIndices.has(index)) {
+                selectedFileIndices.delete(index);
+            } else {
+                selectedFileIndices.add(index);
+            }
+        }
+
+        function getStatusText(status) {
+            const map = { 'M': '修改', 'A': '新增', 'D': '删除' };
+            return map[status] || status;
+        }
+
+        async function startReview() {
+            if (selectedFileIndices.size === 0) {
+                alert('请至少选择一个文件');
+                return;
+            }
+
+            const reviewBtn = document.getElementById('reviewBtn');
+            reviewBtn.disabled = true;
+            reviewBtn.innerHTML = '<span class="loading"></span> 审核中...';
+            
+            log(`\n开始审核 ${selectedFileIndices.size} 个文件...`);
+            
+            try {
+                const response = await fetch('/api/online/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ indices: Array.from(selectedFileIndices) })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    log('❌ ' + data.error);
+                    alert('审核失败: ' + data.error);
+                } else {
+                    log('✅ 审核完成！');
+                    log(`📄 报告已生成: ${data.report_path}`);
+                }
+            } catch (error) {
+                log('❌ 请求失败: ' + error.message);
+            } finally {
+                reviewBtn.disabled = false;
+                reviewBtn.textContent = '开始审核';
+            }
+        }
+
+        function loadPrevious() {
+            // TODO: 实现上100条
+        }
+
+        function loadNext() {
+            // TODO: 实现下100条
+        }
+
+        window.onload = () => {
+            loadConfig();
+        };
+    </script>
+</body>
+</html>

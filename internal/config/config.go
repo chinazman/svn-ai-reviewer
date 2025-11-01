@@ -12,6 +12,7 @@ type Config struct {
 	SVN          SVNConfig    `yaml:"svn"`
 	Ignore       []string     `yaml:"ignore"`
 	Report       ReportConfig `yaml:"report"`
+	Online       OnlineConfig `yaml:"online"`
 }
 
 type AIConfig struct {
@@ -25,6 +26,12 @@ type AIConfig struct {
 
 type SVNConfig struct {
 	Command string `yaml:"command"`
+}
+
+type OnlineConfig struct {
+	URL      string `yaml:"url"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type ReportConfig struct {
@@ -52,4 +59,12 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func SaveConfig(path string, cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }

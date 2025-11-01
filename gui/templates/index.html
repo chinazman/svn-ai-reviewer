@@ -162,6 +162,25 @@
             border-radius: 4px;
             font-size: 14px;
         }
+        .mode-switch {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .mode-btn {
+            padding: 8px 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .mode-btn.active {
+            background: white;
+            color: #667eea;
+        }
     </style>
 </head>
 <body>
@@ -169,6 +188,10 @@
         <div class="header">
             <h1>🔍 SVN 代码审核工具</h1>
             <p>基于 AI 的智能代码审核系统</p>
+            <div class="mode-switch">
+                <button class="mode-btn active">本地模式</button>
+                <button class="mode-btn" onclick="window.location.href='/online'">在线模式</button>
+            </div>
         </div>
         
         <div class="content">

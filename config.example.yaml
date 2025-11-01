@@ -61,6 +61,13 @@ ignore:
   - "*.class"
   - "*.jar"
 
+# 在线模式配置（可选）
+# 使用 --save 参数后会自动保存到这里
+online:
+  url: ""  # SVN 服务器地址，例如: https://svn.example.com/repo
+  username: ""  # SVN 用户名
+  password: ""  # SVN 密码（注意：明文存储，请注意安全）
+
 # 报告配置
 report:
   # 报告输出目录

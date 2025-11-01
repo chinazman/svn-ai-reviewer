@@ -5,13 +5,17 @@
 ## 功能特性
 
 - ✅ Web 图形界面（GUI）和命令行（CLI）双模式
+- ✅ **本地模式**：扫描本地工作目录的变更文件
+- ✅ **在线模式**：连接SVN服务器审核历史版本（新功能）
 - ✅ 无需安装额外依赖，纯 Go 实现
 - ✅ 自动扫描 SVN 工作目录的变更文件（包括新增、修改、删除）
-- ✅ 支持选择多个文件进行审核
+- ✅ 支持搜索SVN提交记录（按路径、关键词、作者）
+- ✅ 支持选择多个版本和文件进行审核
 - ✅ 集成 AI 模型进行智能代码审核
 - ✅ 支持 OpenAI 协议的模型（OpenAI、DeepSeek 等）
 - ✅ 可配置的审核规则和系统提示词
 - ✅ 生成 HTML 格式的审核报告
+- ✅ 安全存储SVN服务器凭据
 - ✅ 易于扩展其他 AI 协议
 
 ## 安装
@@ -59,6 +63,16 @@ review_prompt: |
 
 svn:
   command: "svn"  # SVN 命令路径
+
+# 在线模式配置（可选，使用--save参数后自动保存）
+online:
+  url: "https://svn.example.com/repo"
+  username: "your_username"
+  password: "your_password"
+
+report:
+  output_dir: "./reports"
+  auto_open: true
 ```
 
 ## 使用方法
@@ -67,6 +81,7 @@ svn:
 
 直接双击 `svn-reviewer.exe` 启动 Web 界面，程序会自动在浏览器中打开 `http://localhost:8080`：
 
+#### 本地模式（审核本地变更）
 1. 自动加载配置文件（默认 config.yaml）
 2. 输入 SVN 工作目录（默认当前目录）
 3. 点击"扫描变更"按钮
@@ -74,16 +89,28 @@ svn:
 5. 点击"开始审核"按钮
 6. 等待审核完成，自动生成并打开 HTML 报告
 
+#### 在线模式（审核历史版本）
+1. 点击界面顶部的"在线模式"按钮切换
+2. 输入SVN服务器地址、用户名、密码
+3. 点击"连接服务器"
+4. 输入搜索条件（路径、关键词、作者）
+5. 点击"搜索"查看提交记录
+6. 勾选要审核的版本，点击"加载选中版本的文件"
+7. 勾选要审核的文件，点击"开始审核"
+8. 等待审核完成，自动生成并打开 HTML 报告
+
 界面特点：
 - 🎨 现代化的渐变色设计
 - 📱 响应式布局，支持各种屏幕尺寸
 - 🔄 实时日志输出
 - ✅ 文件状态标识（新增/修改/删除）
+- 🌐 支持本地和在线两种模式
+- 🔍 强大的搜索功能
 - 🚀 一键操作，简单易用
 
 ### CLI 模式
 
-#### 基本用法
+#### 本地模式
 
 审核当前目录的所有变更：
 
@@ -91,22 +118,49 @@ svn:
 svn-reviewer review
 ```
 
-#### 指定工作目录
+指定工作目录：
 
 ```bash
 svn-reviewer review -d /path/to/svn/repo
 ```
 
-#### 选择特定文件审核
+选择特定文件审核：
 
 ```bash
 svn-reviewer review -f file1.go,file2.go
 ```
 
-#### 交互式选择文件
+交互式选择文件：
 
 ```bash
 svn-reviewer review -i
+```
+
+#### 在线模式（新功能）
+
+连接SVN服务器审核历史版本：
+
+```bash
+# 基本用法
+svn-reviewer review online --url https://svn.example.com/repo --username your_name --password your_pass
+
+# 保存凭据
+svn-reviewer review online --url https://svn.example.com/repo --username your_name --password your_pass --save
+
+# 使用保存的凭据
+svn-reviewer review online
+
+# 搜索特定作者的提交
+svn-reviewer review online --author zhangsan
+
+# 搜索包含关键词的提交
+svn-reviewer review online --keyword "bug fix"
+
+# 搜索特定路径
+svn-reviewer review online --path /trunk/src
+
+# 组合搜索
+svn-reviewer review online --path /trunk --author zhangsan --keyword "feature"
 ```
 
 #### 使用自定义配置文件
