@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -41,6 +42,7 @@ func NewServer() *Server {
 func (s *Server) Start() error {
 	http.HandleFunc("/", s.handleIndex)
 	http.HandleFunc("/online", s.handleOnlineIndex)
+	http.HandleFunc("/api/list-configs", s.handleListConfigs)
 	http.HandleFunc("/api/load-config", s.handleLoadConfig)
 	http.HandleFunc("/api/scan", s.handleScan)
 	http.HandleFunc("/api/review", s.handleReview)
@@ -87,6 +89,37 @@ func (s *Server) handleOnlineIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tmpl.Execute(w, nil)
+}
+
+func (s *Server) handleListConfigs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var configs []string
+
+	// 检查根目录的 config.yaml
+	if _, err := os.Stat("config.yaml"); err == nil {
+		configs = append(configs, "config.yaml")
+	}
+
+	// 检查 config 目录下的所有 yaml 文件
+	if entries, err := os.ReadDir("config"); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				name := entry.Name()
+				if strings.HasSuffix(strings.ToLower(name), ".yaml") || strings.HasSuffix(strings.ToLower(name), ".yml") {
+					configs = append(configs, "config/"+name)
+				}
+			}
+		}
+	}
+
+	respondJSON(w, map[string]interface{}{
+		"success": true,
+		"configs": configs,
+	}, http.StatusOK)
 }
 
 func (s *Server) handleLoadConfig(w http.ResponseWriter, r *http.Request) {

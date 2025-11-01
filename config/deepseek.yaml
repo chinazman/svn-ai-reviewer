@@ -1,0 +1,49 @@
+# DeepSeek 配置示例
+
+ai:
+  provider: "deepseek"
+  api_key: "sk-f903a95f3bec43018687aa5e2002ba04"
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-coder"
+  temperature: 0.3
+  max_tokens: 3000
+
+review_prompt: |
+  你是一个专业的代码审核专家。请仔细审查以下代码变更，并从以下几个方面进行评估：
+  1. 代码规范：检查代码风格、命名规范、注释质量
+  2. 潜在问题：识别可能的 bug、性能问题、安全隐患
+  3. 最佳实践：评估是否遵循了语言和框架的最佳实践
+  4. 可维护性：代码的可读性和可维护性
+  
+  请以 JSON 格式输出审核结果，格式如下：
+  {
+    "summary": "简要总结代码质量（1-2句话）",
+    "score": 85,
+    "issues": [
+      {
+        "severity": "high|medium|low",
+        "title": "问题标题",
+        "description": "问题详细描述",
+        "suggestion": "改进建议"
+      }
+    ]
+  }
+  
+  注意：只输出 JSON，不要包含任何其他文字。score 为 0-100 的评分。如果没有问题，issues 为空数组。
+
+svn:
+  command: "svn"
+
+ignore:
+  - "*.log"
+  - "*.tmp"
+  - "node_modules/"
+  - "target/"
+  - ".idea/"
+  - ".vscode/"
+  - "*.class"
+  - "*.jar"
+
+report:
+  output_dir: "./reports"
+  auto_open: true

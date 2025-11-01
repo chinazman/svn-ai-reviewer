@@ -197,10 +197,9 @@
         <div class="content">
             <div class="section">
                 <div class="section-title">📁 配置文件</div>
-                <div class="input-group">
-                    <input type="text" id="configPath" value="config.yaml" placeholder="配置文件路径">
-                    <button onclick="loadConfig()">加载配置</button>
-                </div>
+                <select id="configPath" onchange="loadConfig()" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; margin-bottom: 15px;">
+                    <option value="config.yaml">config.yaml (默认)</option>
+                </select>
                 <div id="configInfo"></div>
             </div>
 
@@ -293,8 +292,40 @@
             };
         }
 
+        // 加载配置文件列表
+        async function loadConfigList() {
+            try {
+                const response = await fetch('/api/list-configs');
+                const data = await response.json();
+                
+                if (data.success && data.configs && data.configs.length > 0) {
+                    const select = document.getElementById('configPath');
+                    select.innerHTML = '';
+                    
+                    data.configs.forEach(config => {
+                        const option = document.createElement('option');
+                        option.value = config;
+                        option.textContent = config;
+                        select.appendChild(option);
+                    });
+                    
+                    // 加载保存的配置选择
+                    const savedConfig = localStorage.getItem('selected_config');
+                    if (savedConfig && data.configs.includes(savedConfig)) {
+                        select.value = savedConfig;
+                    }
+                }
+            } catch (error) {
+                console.error('加载配置列表失败:', error);
+            }
+        }
+
         async function loadConfig() {
             const configPath = document.getElementById('configPath').value;
+            
+            // 保存配置选择
+            localStorage.setItem('selected_config', configPath);
+            
             log('正在加载配置...');
             
             try {
@@ -507,9 +538,10 @@
         }
 
         // 页面加载时自动加载配置和工作目录
-        window.onload = () => {
+        window.onload = async () => {
             loadWorkDir();
-            loadConfig();
+            await loadConfigList(); // 先加载配置列表
+            loadConfig(); // 然后加载配置
             connectLogs(); // 连接SSE日志流
         };
 
