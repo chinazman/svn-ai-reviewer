@@ -507,15 +507,52 @@ func (s *Server) handleOnlineReview(w http.ResponseWriter, r *http.Request) {
 			Status:   file.Status,
 		}
 
-		diff, err := s.svnClient.GetRevisionDiff(file.Revision, file.Path)
-		if err != nil {
-			fileReview.Error = err
-			htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+		// 删除的文件直接跳过
+		if file.Status == "D" {
 			continue
 		}
 
-		if strings.TrimSpace(diff) == "" {
-			continue
+		var diff string
+		var err error
+
+		// 对于新增文件，获取完整内容（纯文本，不带diff格式）
+		if file.Status == "A" {
+			content, err := s.svnClient.GetFileContentAtRevision(file.Revision, file.Path)
+			if err != nil {
+				// 备选方案：使用整个版本的diff
+				fullDiff, err2 := s.svnClient.GetRevisionDiff(file.Revision, "")
+				if err2 == nil && strings.TrimSpace(fullDiff) != "" {
+					diff = fullDiff
+				} else {
+					fileReview.Error = err
+					htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+					continue
+				}
+			} else {
+				// 直接使用纯文本内容，不添加任何前缀
+				diff = content
+			}
+		} else {
+			// 对于修改的文件，获取diff
+			diff, err = s.svnClient.GetRevisionDiff(file.Revision, file.Path)
+			if err != nil {
+				fileReview.Error = err
+				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+				continue
+			}
+
+			if strings.TrimSpace(diff) == "" {
+				// 尝试获取整个版本的diff作为备选
+				fullDiff, err2 := s.svnClient.GetRevisionDiff(file.Revision, "")
+				if err2 == nil && strings.TrimSpace(fullDiff) != "" {
+					diff = fullDiff
+				} else {
+					// 如果仍然没有diff，跳过但记录到报告中
+					fileReview.Error = fmt.Errorf("未能提取到文件差异内容")
+					htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+					continue
+				}
+			}
 		}
 
 		result, err := aiClient.Review(ctx, file.Path, diff, s.cfg.ReviewPrompt)

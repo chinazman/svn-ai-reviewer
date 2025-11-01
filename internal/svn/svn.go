@@ -272,14 +272,10 @@ func (c *Client) SearchLog(path, keyword, author string, limit, offset int) ([]L
 }
 
 // GetRevisionDiff 获取指定版本的差异
+// 如果指定了path，则只返回该文件的差异；否则返回整个版本的差异
 func (c *Client) GetRevisionDiff(revision int, path string) (string, error) {
-	args := []string{"diff", "-c", fmt.Sprintf("%d", revision)}
-	
-	targetURL := c.url
-	if path != "" {
-		targetURL = c.url + "/" + strings.TrimPrefix(path, "/")
-	}
-	args = append(args, targetURL)
+	// 获取整个版本的diff
+	args := []string{"diff", "-c", fmt.Sprintf("%d", revision), c.url}
 	
 	// 只有在提供了用户名时才添加认证信息
 	if c.username != "" {
@@ -299,12 +295,41 @@ func (c *Client) GetRevisionDiff(revision int, path string) (string, error) {
 	if err := cmd.Run(); err != nil {
 		// diff命令在有差异时可能返回非零，这是正常的
 		if out.Len() > 0 {
-			return out.String(), nil
+			fullDiff := out.String()
+			// 如果指定了文件路径，提取该文件的diff
+			if path != "" {
+				extracted := extractFileDiff(fullDiff, path)
+				// 调试：如果提取失败，打印信息
+				if extracted == "" {
+					fmt.Printf("[调试] 未能从diff中提取文件: %s\n", path)
+					fmt.Printf("[调试] 完整diff前200字符: %s\n", fullDiff[:min(200, len(fullDiff))])
+				}
+				return extracted, nil
+			}
+			return fullDiff, nil
 		}
 		return "", fmt.Errorf("获取版本差异失败: %w, 错误信息: %s", err, errOut.String())
 	}
 	
-	return out.String(), nil
+	fullDiff := out.String()
+	// 如果指定了文件路径，提取该文件的diff
+	if path != "" {
+		extracted := extractFileDiff(fullDiff, path)
+		// 调试：如果提取失败，打印信息
+		if extracted == "" && fullDiff != "" {
+			fmt.Printf("[调试] 未能从diff中提取文件: %s\n", path)
+			fmt.Printf("[调试] 完整diff前200字符: %s\n", fullDiff[:min(200, len(fullDiff))])
+		}
+		return extracted, nil
+	}
+	return fullDiff, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // GetRevisionFiles 获取指定版本修改的文件列表
@@ -450,4 +475,159 @@ func extractXMLTagContent(str, tagName string) string {
 		return ""
 	}
 	return strings.TrimSpace(str[start : start+end])
+}
+
+
+// extractFileDiff 从完整的diff中提取特定文件的diff
+func extractFileDiff(fullDiff, filePath string) string {
+	if fullDiff == "" {
+		return ""
+	}
+	
+	lines := strings.Split(fullDiff, "\n")
+	var result []string
+	inFile := false
+	
+	// 规范化文件路径（移除开头的斜杠）
+	targetPath := strings.TrimPrefix(filePath, "/")
+	
+	// 尝试多种匹配方式
+	// 1. 完整路径匹配
+	// 2. 文件名匹配（如果路径中包含文件名）
+	fileName := ""
+	if idx := strings.LastIndex(targetPath, "/"); idx >= 0 {
+		fileName = targetPath[idx+1:]
+	} else {
+		fileName = targetPath
+	}
+	
+	for i, line := range lines {
+		if strings.HasPrefix(line, "Index: ") {
+			// 提取Index行中的路径
+			indexPath := strings.TrimPrefix(line, "Index: ")
+			indexPath = strings.TrimSpace(indexPath)
+			
+			// 检查是否匹配（支持多种匹配方式）
+			matched := false
+			if strings.Contains(indexPath, targetPath) {
+				matched = true
+			} else if strings.HasSuffix(indexPath, fileName) {
+				matched = true
+			} else if strings.HasSuffix(indexPath, targetPath) {
+				matched = true
+			}
+			
+			if matched {
+				inFile = true
+				result = append(result, line)
+			} else {
+				inFile = false
+			}
+		} else if inFile {
+			result = append(result, line)
+			// 如果遇到下一个文件的Index标记，停止
+			if i+1 < len(lines) && strings.HasPrefix(lines[i+1], "Index: ") {
+				break
+			}
+		}
+	}
+	
+	return strings.Join(result, "\n")
+}
+
+
+// GetFileContentAtRevision 获取指定版本的文件完整内容
+// 对于新增文件，从diff中提取内容更可靠
+func (c *Client) GetFileContentAtRevision(revision int, path string) (string, error) {
+	// 获取该版本的完整diff
+	fullDiff, err := c.GetRevisionDiff(revision, "")
+	if err != nil {
+		return "", fmt.Errorf("获取版本diff失败: %w", err)
+	}
+	
+	// 从diff中提取新增文件的内容
+	content := extractNewFileContent(fullDiff, path)
+	if content == "" {
+		return "", fmt.Errorf("未能从diff中提取文件内容")
+	}
+	
+	return content, nil
+}
+
+// extractNewFileContent 从diff中提取新增文件的完整内容
+func extractNewFileContent(fullDiff, filePath string) string {
+	if fullDiff == "" {
+		fmt.Printf("[调试] fullDiff为空\n")
+		return ""
+	}
+	
+	lines := strings.Split(fullDiff, "\n")
+	var result []string
+	inFile := false
+	inContent := false
+	
+	// 规范化文件路径
+	targetPath := strings.TrimPrefix(filePath, "/")
+	fileName := ""
+	if idx := strings.LastIndex(targetPath, "/"); idx >= 0 {
+		fileName = targetPath[idx+1:]
+	} else {
+		fileName = targetPath
+	}
+	
+	fmt.Printf("[调试] 提取新增文件内容: %s (文件名: %s)\n", targetPath, fileName)
+	
+	foundFile := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Index: ") {
+			// 检查是否是目标文件
+			indexPath := strings.TrimPrefix(line, "Index: ")
+			indexPath = strings.TrimSpace(indexPath)
+			
+			matched := false
+			if strings.Contains(indexPath, targetPath) {
+				matched = true
+			} else if strings.HasSuffix(indexPath, fileName) {
+				matched = true
+			} else if strings.HasSuffix(indexPath, targetPath) {
+				matched = true
+			}
+			
+			if matched {
+				inFile = true
+				inContent = false
+				foundFile = true
+				fmt.Printf("[调试] 找到目标文件: %s\n", indexPath)
+			} else {
+				inFile = false
+				inContent = false
+			}
+		} else if inFile {
+			// 跳过diff头部信息，直到遇到 @@ 行
+			if strings.HasPrefix(line, "@@") {
+				inContent = true
+				fmt.Printf("[调试] 开始提取内容\n")
+				continue
+			}
+			
+			// 提取以 + 开头的行（新增内容）
+			if inContent && strings.HasPrefix(line, "+") {
+				// 移除开头的 +
+				content := strings.TrimPrefix(line, "+")
+				result = append(result, content)
+			}
+		}
+	}
+	
+	if !foundFile {
+		fmt.Printf("[调试] 未找到目标文件，diff前500字符:\n%s\n", fullDiff[:min(500, len(fullDiff))])
+	}
+	
+	if len(result) == 0 {
+		fmt.Printf("[调试] 未提取到任何内容\n")
+	} else {
+		fmt.Printf("[调试] 提取到 %d 行内容\n", len(result))
+	}
+	
+	return strings.Join(result, "\n")
 }
