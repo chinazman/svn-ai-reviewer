@@ -7,7 +7,9 @@ ai:
   provider: "deepseek"
   
   # API 配置
-  api_key: "your-api-key-here"  # 替换为你的 API Key
+  # 使用 svn-ai-reviewer.exe encrypt <your-api-key> 命令加密后填写密文
+  # 也支持直接填写明文（不推荐）
+  api_key: "your-encrypted-api-key-here"
   
   # DeepSeek 配置示例
   base_url: "https://api.deepseek.com/v1"

@@ -2,7 +2,8 @@
 
 ai:
   provider: "openai"
-  api_key: "your-qwen-api-key"
+  # 使用 svn-ai-reviewer.exe encrypt <your-api-key> 命令加密后填写密文
+  api_key: "your-encrypted-api-key"
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   model: "qwen-coder-plus"
   temperature: 0.3

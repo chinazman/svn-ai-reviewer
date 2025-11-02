@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 
+	"svn-ai-reviewer/internal/crypto"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,6 +50,21 @@ func LoadConfig(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
+	}
+
+	// 解密 API Key
+	if cfg.AI.APIKey != "" {
+		decrypted, err := crypto.DecryptAPIKey(cfg.AI.APIKey)
+		if err != nil {
+			// 如果解密失败，可能是明文，尝试直接使用
+			// 这样可以兼容旧的明文配置
+			// 但为了安全，可以选择返回错误强制使用加密
+			// return nil, fmt.Errorf("解密 API Key 失败: %w", err)
+			
+			// 兼容模式：解密失败时使用原值（假设是明文）
+			decrypted = cfg.AI.APIKey
+		}
+		cfg.AI.APIKey = decrypted
 	}
 
 	// 设置默认值
