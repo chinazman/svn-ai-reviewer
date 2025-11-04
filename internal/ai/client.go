@@ -26,6 +26,8 @@ func NewClient(cfg *config.AIConfig) (Client, error) {
 	switch cfg.Provider {
 	case "openai", "deepseek", "custom":
 		return NewOpenAIClient(cfg), nil
+	case "dashscope":
+		return NewDashScopeClient(cfg), nil
 	default:
 		return nil, fmt.Errorf("不支持的 AI 提供商: %s", cfg.Provider)
 	}
