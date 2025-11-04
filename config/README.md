@@ -12,9 +12,11 @@
 
 ### deepseek.yaml - DeepSeek 配置
 
+DeepSeek 使用 OpenAI 兼容协议：
+
 ```yaml
 ai:
-  provider: "deepseek"
+  provider: "openai"
   api_key: "your-api-key"
   base_url: "https://api.deepseek.com/v1"
   model: "deepseek-coder"
@@ -56,9 +58,9 @@ ai:
 ```yaml
 # AI 模型配置
 ai:
-  provider: "openai"      # 提供商：openai, deepseek, dashscope, custom
-  api_key: "your-key"     # API 密钥
-  base_url: "https://..."  # API 地址（dashscope 不需要）
+  provider: "openai"      # 提供商：openai (OpenAI 兼容协议), dashscope (阿里云 DashScope)
+  api_key: "your-key"     # API 密钥（支持加密）
+  base_url: "https://..."  # API 地址（dashscope 应用模式不需要）
   model: "model-name"     # 模型名称（dashscope 使用应用 ID）
   temperature: 0.3        # 温度参数（dashscope 在应用中配置）
   max_tokens: 3000        # 最大令牌数（dashscope 在应用中配置）

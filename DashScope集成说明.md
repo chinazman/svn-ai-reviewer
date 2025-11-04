@@ -62,29 +62,38 @@ DashScope 使用应用级别的 API，与 OpenAI 兼容模式不同：
 ```yaml
 ai:
   provider: "dashscope"
-  api_key: "your-dashscope-api-key"
+  api_key: "your-dashscope-api-key"  # 支持加密或明文
   base_url: "https://dashscope.aliyuncs.com"  # 可选，默认值
   model: "YOUR_APP_ID"  # 应用 ID
 ```
 
 **注意**：
 - `provider` 必须设置为 `"dashscope"`
+- `api_key` 支持加密存储（推荐）或明文存储
 - `model` 字段用于存储应用 ID
 - `base_url` 可选，默认为 `https://dashscope.aliyuncs.com`
 - `temperature`、`max_tokens` 等参数在 DashScope 应用配置中设置
 
-### 3. 加密 API Key（推荐）
+### 3. 加密 API Key（强烈推荐）
 
-为了安全，建议加密 API Key：
+为了安全，强烈建议加密 API Key：
 
 ```bash
 # 加密 API Key
-svn-ai-reviewer.exe encrypt your-dashscope-api-key
+svn-ai-reviewer.exe encrypt sk-your-dashscope-api-key
+
+# 输出示例：
+# 加密后的 API Key: 0Ati32AZ4NWjIeltiUGDtFUKMOA/F2WQ3dJD4gkhwvmtVoa5h5LqWQ==
 
 # 将加密后的值填入配置文件
 ai:
-  api_key: "加密后的值"
+  api_key: "0Ati32AZ4NWjIeltiUGDtFUKMOA/F2WQ3dJD4gkhwvmtVoa5h5LqWQ=="
 ```
+
+**加密说明**：
+- 配置加载时会自动尝试解密 API Key
+- 如果解密失败，会当作明文使用（兼容模式）
+- 加密后的配置文件可以安全地提交到版本控制系统
 
 ### 4. 使用配置
 
@@ -138,10 +147,12 @@ type DashScopeClient struct {
 
 ## 注意事项
 
-1. DashScope 的应用 ID 是必需的，需要在控制台创建应用
-2. 应用级别的参数（如 temperature）在 DashScope 控制台配置，不在配置文件中
-3. 系统提示词会与用户内容合并为一个完整的 prompt
-4. 确保 API Key 有足够的配额
+1. **API Key 加密**：强烈建议使用加密的 API Key，配置加载时会自动解密
+2. **应用 ID**：DashScope 的应用 ID 是必需的，需要在控制台创建应用
+3. **参数配置**：应用级别的参数（如 temperature）在 DashScope 控制台配置，不在配置文件中
+4. **提示词合并**：系统提示词会与用户内容合并为一个完整的 prompt
+5. **配额检查**：确保 API Key 有足够的配额
+6. **兼容模式**：支持明文 API Key（不推荐），但建议使用加密方式
 
 ## 后续优化建议
 

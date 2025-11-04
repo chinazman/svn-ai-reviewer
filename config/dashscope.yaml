@@ -6,7 +6,8 @@ ai:
   provider: "dashscope"
   
   # API 配置
-  # 请替换为你的 DashScope API Key
+  # API Key 支持加密存储，使用命令: svn-ai-reviewer.exe encrypt YOUR_API_KEY
+  # 加密后填入加密值，或直接填入明文（不推荐）
   api_key: "YOUR_DASHSCOPE_API_KEY"
   
   # DashScope API 地址（可选，默认为 https://dashscope.aliyuncs.com）
@@ -18,7 +19,7 @@ ai:
   
   # 注意：temperature 和 max_tokens 等参数在 DashScope 应用配置中设置
 
-# 审核规则系统提示词
+# 审核规则系统提示词（这个不需要，因为已经DashScope上加了，并且有知识库）
 review_prompt: ""
 
 # SVN 配置

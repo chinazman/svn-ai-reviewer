@@ -12,26 +12,29 @@
 
 ## 测试步骤
 
-### 1. 配置 API 凭证
+### 1. 加密 API Key（强烈推荐）
 
-编辑 `config/dashscope.yaml`：
+```bash
+# 加密你的 DashScope API Key
+svn-ai-reviewer.exe encrypt sk-your-dashscope-api-key
+
+# 输出示例：
+# 加密后的 API Key: 0Ati32AZ4NWjIeltiUGDtFUKMOA/F2WQ3dJD4gkhwvmtVoa5h5LqWQ==
+```
+
+### 2. 配置 API 凭证
+
+编辑 `config/dashscope.yaml`，使用加密后的 API Key：
 
 ```yaml
 ai:
   provider: "dashscope"
-  api_key: "sk-xxxxx"  # 你的 DashScope API Key
+  api_key: "0Ati32AZ4NWjIeltiUGDtFUKMOA/F2WQ3dJD4gkhwvmtVoa5h5LqWQ=="  # 加密后的值
   base_url: "https://dashscope.aliyuncs.com"  # 可选，默认值
   model: "your-app-id"  # 你的应用 ID
 ```
 
-### 2. 加密 API Key（可选但推荐）
-
-```bash
-# 加密 API Key
-svn-ai-reviewer.exe encrypt sk-xxxxx
-
-# 将输出的加密值替换到配置文件中
-```
+**注意**：也可以直接使用明文 API Key，但不推荐（安全风险）
 
 ### 3. 启动 GUI 服务
 

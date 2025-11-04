@@ -3,21 +3,25 @@
 
 # AI 模型配置
 ai:
-  # 模型提供商类型: openai, deepseek, custom
-  provider: "deepseek"
+  # 模型提供商类型: openai (OpenAI 兼容协议), dashscope (阿里云 DashScope)
+  provider: "openai"
   
   # API 配置
   # 使用 svn-ai-reviewer.exe encrypt <your-api-key> 命令加密后填写密文
   # 也支持直接填写明文（不推荐）
   api_key: "your-encrypted-api-key-here"
   
-  # DeepSeek 配置示例
+  # DeepSeek 配置示例（使用 OpenAI 兼容协议）
   base_url: "https://api.deepseek.com/v1"
   model: "deepseek-chat"
   
-  # OpenAI 配置示例（取消注释以使用）
+  # OpenAI 配置示例
   # base_url: "https://api.openai.com/v1"
   # model: "gpt-4"
+  
+  # 通义千问配置示例（使用 OpenAI 兼容模式）
+  # base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  # model: "qwen-coder-plus"
   
   # 请求参数
   temperature: 0.3
