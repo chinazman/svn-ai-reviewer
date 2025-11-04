@@ -185,7 +185,8 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	s.changes = changes
 
-	var files []map[string]interface{}
+	// 初始化为空数组而不是 nil，确保 JSON 序列化时返回 [] 而不是 null
+	files := make([]map[string]interface{}, 0)
 	for i, change := range changes {
 		files = append(files, map[string]interface{}{
 			"index":  i,
@@ -427,7 +428,6 @@ func (s *Server) handleOnlineSearch(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Path    string `json:"path"`
 		Keyword string `json:"keyword"`
-		Author  string `json:"author"`
 		Limit   int    `json:"limit"`
 		Offset  int    `json:"offset"`
 	}
@@ -440,7 +440,8 @@ func (s *Server) handleOnlineSearch(w http.ResponseWriter, r *http.Request) {
 		req.Limit = 100
 	}
 
-	entries, err := s.svnClient.SearchLog(req.Path, req.Keyword, req.Author, req.Limit, req.Offset)
+	// 关键词现在用于搜索提交信息和作者
+	entries, hasMore, err := s.svnClient.SearchLog(req.Path, req.Keyword, req.Limit, req.Offset)
 	if err != nil {
 		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
 		return
@@ -448,7 +449,8 @@ func (s *Server) handleOnlineSearch(w http.ResponseWriter, r *http.Request) {
 
 	s.logEntries = entries
 
-	var logs []map[string]interface{}
+	// 初始化为空数组而不是 nil，确保 JSON 序列化时返回 [] 而不是 null
+	logs := make([]map[string]interface{}, 0)
 	for i, entry := range entries {
 		logs = append(logs, map[string]interface{}{
 			"index":    i,
@@ -462,6 +464,8 @@ func (s *Server) handleOnlineSearch(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, map[string]interface{}{
 		"success": true,
 		"logs":    logs,
+		"hasMore": hasMore,
+		"offset":  req.Offset,
 	}, http.StatusOK)
 }
 
@@ -495,7 +499,8 @@ func (s *Server) handleOnlineFiles(w http.ResponseWriter, r *http.Request) {
 
 	s.changes = allFiles
 
-	var files []map[string]interface{}
+	// 初始化为空数组而不是 nil，确保 JSON 序列化时返回 [] 而不是 null
+	files := make([]map[string]interface{}, 0)
 	for i, change := range allFiles {
 		files = append(files, map[string]interface{}{
 			"index":    i,

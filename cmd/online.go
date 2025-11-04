@@ -19,7 +19,6 @@ var (
 	svnPassword string
 	searchPath  string
 	searchKeyword string
-	searchAuthor string
 	saveCredentials bool
 )
 
@@ -36,8 +35,7 @@ func init() {
 	onlineCmd.Flags().StringVar(&svnUsername, "username", "", "SVN用户名")
 	onlineCmd.Flags().StringVar(&svnPassword, "password", "", "SVN密码")
 	onlineCmd.Flags().StringVarP(&searchPath, "path", "p", "", "搜索路径（默认根目录）")
-	onlineCmd.Flags().StringVarP(&searchKeyword, "keyword", "k", "", "搜索关键词")
-	onlineCmd.Flags().StringVarP(&searchAuthor, "author", "a", "", "搜索作者")
+	onlineCmd.Flags().StringVarP(&searchKeyword, "keyword", "k", "", "搜索关键词（搜索提交信息和作者）")
 	onlineCmd.Flags().BoolVar(&saveCredentials, "save", false, "保存SVN凭据")
 }
 
@@ -95,7 +93,7 @@ func runOnline(cmd *cobra.Command, args []string) error {
 
 	// 搜索日志
 	fmt.Println("\n正在搜索SVN提交记录...")
-	entries, err := svnClient.SearchLog(searchPath, searchKeyword, searchAuthor, 100, 0)
+	entries, _, err := svnClient.SearchLog(searchPath, searchKeyword, 100, 0)
 	if err != nil {
 		return fmt.Errorf("搜索日志失败: %w", err)
 	}

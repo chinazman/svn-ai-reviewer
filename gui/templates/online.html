@@ -239,8 +239,7 @@
                 <div class="section-title">🔍 搜索提交记录</div>
                 <div class="input-group">
                     <input type="text" id="searchPath" placeholder="目录路径 (默认根目录)">
-                    <input type="text" id="searchKeyword" placeholder="关键词">
-                    <input type="text" id="searchAuthor" placeholder="作者">
+                    <input type="text" id="searchKeyword" placeholder="关键词 (支持搜索提交信息和作者)">
                     <button onclick="searchLogs()">搜索</button>
                 </div>
             </div>
@@ -263,8 +262,8 @@
                     </table>
                 </div>
                 <div class="pagination">
-                    <button onclick="loadPrevious()" id="prevBtn" disabled>上100条</button>
-                    <button onclick="loadNext()" id="nextBtn" disabled>下100条</button>
+                    <span id="offsetInfo" style="margin-right: 10px; color: #666;">已加载数量: 0</span>
+                    <button onclick="loadNext()" id="nextBtn" disabled>加载更多</button>
                     <button onclick="loadSelectedFiles()">加载选中版本的文件</button>
                 </div>
             </div>
@@ -307,8 +306,10 @@
         let selectedLogIndices = new Set();
         let selectedFileIndices = new Set();
         let currentOffset = 0;
+        let currentSearchParams = {}; // 保存当前搜索参数
         const limit = 100;
         let eventSource = null;
+        let hasMoreLogs = true; // 是否还有更多日志
 
         function log(message) {
             const logArea = document.getElementById('logArea');
@@ -482,30 +483,43 @@
         function loadSearchParams() {
             const path = localStorage.getItem('search_path');
             const keyword = localStorage.getItem('search_keyword');
-            const author = localStorage.getItem('search_author');
             
             if (path) document.getElementById('searchPath').value = path;
             if (keyword) document.getElementById('searchKeyword').value = keyword;
-            if (author) document.getElementById('searchAuthor').value = author;
         }
 
         async function searchLogs() {
             const path = document.getElementById('searchPath').value;
             const keyword = document.getElementById('searchKeyword').value;
-            const author = document.getElementById('searchAuthor').value;
             
             // 保存搜索参数
             localStorage.setItem('search_path', path);
             localStorage.setItem('search_keyword', keyword);
-            localStorage.setItem('search_author', author);
             
+            // 重置偏移量和搜索参数
+            currentOffset = 0;
+            currentSearchParams = { path, keyword };
+            
+            // 清空现有日志列表（新搜索时）
+            logs = [];
+            selectedLogIndices.clear();
+            
+            await performSearch();
+        }
+
+        async function performSearch() {
             log('正在搜索提交记录...');
             
             try {
                 const response = await fetch('/api/online/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path, keyword, author, limit, offset: currentOffset })
+                    body: JSON.stringify({ 
+                        path: currentSearchParams.path, 
+                        keyword: currentSearchParams.keyword, 
+                        limit, 
+                        offset: currentOffset 
+                    })
                 });
                 
                 const data = await response.json();
@@ -513,10 +527,19 @@
                     log('❌ ' + data.error);
                     alert('搜索失败: ' + data.error);
                 } else {
-                    logs = data.logs;
-                    selectedLogIndices.clear();
+                    // 确保返回的数据是数组
+                    const newLogs = data.logs || [];
+                    
+                    // 追加新日志到现有列表（而不是替换）
+                    logs = logs.concat(newLogs);
+                    
+                    // 从服务器返回的hasMore判断是否还有更多日志
+                    hasMoreLogs = data.hasMore || false;
+                    
                     renderLogs();
-                    log(`✅ 找到 ${logs.length} 条提交记录`);
+                    updatePaginationButtons();
+                    
+                    log(`✅ 本次获取 ${newLogs.length} 条记录，已加载总数: ${logs.length}`);
                     document.getElementById('logsSection').style.display = 'block';
                 }
             } catch (error) {
@@ -746,12 +769,28 @@
             }
         }
 
-        function loadPrevious() {
-            // TODO: 实现上100条
+        async function loadNext() {
+            if (!hasMoreLogs) {
+                log('⚠️ 没有更多记录了');
+                return;
+            }
+            
+            currentOffset += limit;
+            await performSearch();
         }
 
-        function loadNext() {
-            // TODO: 实现下100条
+        function updatePaginationButtons() {
+            const nextBtn = document.getElementById('nextBtn');
+            if (nextBtn) {
+                nextBtn.disabled = !hasMoreLogs;
+            }
+            
+            // 更新已加载数量显示（使用 offset + limit）
+            const offsetInfo = document.getElementById('offsetInfo');
+            if (offsetInfo) {
+                const loadedCount = currentOffset + limit;
+                offsetInfo.textContent = `已加载数量: ${loadedCount}`;
+            }
         }
 
         window.onload = async () => {

@@ -226,7 +226,15 @@ func (c *Client) TestConnection() error {
 }
 
 // SearchLog 搜索SVN日志
-func (c *Client) SearchLog(path, keyword, author string, limit, offset int) ([]LogEntry, error) {
+// keyword 参数用于搜索提交信息和作者
+// 返回日志条目列表和是否有更多记录的标志
+// 
+// 逻辑说明（类似 TortoiseSVN）：
+// 1. 每次从 SVN 获取 offset+limit 条记录（从头开始）
+// 2. 只对后面的 limit 条记录（即 offset 到 offset+limit）进行关键词过滤
+// 3. 返回过滤后的结果，由前端追加显示
+// 4. 多获取一条记录来判断是否还有更多数据
+func (c *Client) SearchLog(path, keyword string, limit, offset int) ([]LogEntry, bool, error) {
 	args := []string{"log", c.url}
 	
 	if path != "" && path != "/" {
@@ -242,11 +250,11 @@ func (c *Client) SearchLog(path, keyword, author string, limit, offset int) ([]L
 		args = append(args, "--non-interactive")
 	}
 	
-	// 添加限制和搜索条件
-	args = append(args, "--limit", fmt.Sprintf("%d", limit))
-	if author != "" {
-		args = append(args, "--search", author)
-	}
+	// 获取 offset+limit+1 条记录
+	// 多获取一条用于判断是否还有更多数据
+	fetchLimit := offset + limit + 1
+	
+	args = append(args, "--limit", fmt.Sprintf("%d", fetchLimit))
 	args = append(args, "--verbose")
 	args = append(args, "--xml")
 	
@@ -257,27 +265,44 @@ func (c *Client) SearchLog(path, keyword, author string, limit, offset int) ([]L
 	cmd.Stderr = &errOut
 	
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("搜索日志失败: %w, 错误信息: %s", err, errOut.String())
+		return nil, false, fmt.Errorf("搜索日志失败: %w, 错误信息: %s", err, errOut.String())
 	}
 	
 	entries, err := parseLogXML(out.String())
 	if err != nil {
-		return nil, fmt.Errorf("解析日志失败: %w", err)
+		return nil, false, fmt.Errorf("解析日志失败: %w", err)
 	}
 	
-	// 如果有关键词过滤
+	// 判断是否还有更多数据（在过滤之前）
+	hasMore := len(entries) > offset+limit
+	
+	// 只处理从 offset 开始的 limit 条记录
+	if offset >= len(entries) {
+		// 如果 offset 超出范围，返回空结果
+		return []LogEntry{}, false, nil
+	}
+	
+	// 提取需要处理的记录段
+	end := offset + limit
+	if end > len(entries) {
+		end = len(entries)
+	}
+	targetEntries := entries[offset:end]
+	
+	// 如果有关键词，只对这一段记录进行过滤
 	if keyword != "" {
 		var filtered []LogEntry
-		for _, entry := range entries {
-			if strings.Contains(entry.Message, keyword) || 
-			   strings.Contains(entry.Author, keyword) {
+		lowerKeyword := strings.ToLower(keyword)
+		for _, entry := range targetEntries {
+			if strings.Contains(strings.ToLower(entry.Message), lowerKeyword) || 
+			   strings.Contains(strings.ToLower(entry.Author), lowerKeyword) {
 				filtered = append(filtered, entry)
 			}
 		}
-		entries = filtered
+		targetEntries = filtered
 	}
 	
-	return entries, nil
+	return targetEntries, hasMore, nil
 }
 
 // GetRevisionDiff 获取指定版本的差异
