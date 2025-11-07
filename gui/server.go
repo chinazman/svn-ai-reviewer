@@ -897,8 +897,9 @@ func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Path   string `json:"path"`
-		Filter string `json:"filter"`
+		Path     string `json:"path"`
+		Filter   string `json:"filter"`
+		MaxFiles int    `json:"max_files"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusBadRequest)
@@ -910,8 +911,13 @@ func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 设置默认最大文件数
+	if req.MaxFiles <= 0 {
+		req.MaxFiles = 100
+	}
+
 	// 扫描文件
-	files, err := scanSourceFiles(req.Path, req.Filter)
+	files, truncated, err := scanSourceFiles(req.Path, req.Filter, req.MaxFiles)
 	if err != nil {
 		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
 		return
@@ -930,20 +936,23 @@ func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, map[string]interface{}{
-		"success": true,
-		"files":   fileList,
+		"success":   true,
+		"files":     fileList,
+		"truncated": truncated,
+		"total":     len(files),
 	}, http.StatusOK)
 }
 
 // scanSourceFiles 扫描指定路径下的文件
-func scanSourceFiles(path string, filter string) ([]SourceFile, error) {
+func scanSourceFiles(path string, filter string, maxFiles int) ([]SourceFile, bool, error) {
 	var files []SourceFile
 	index := 0
+	truncated := false
 
 	// 检查路径是否存在
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("路径不存在: %v", err)
+		return nil, false, fmt.Errorf("路径不存在: %v", err)
 	}
 
 	// 如果是文件，直接返回
@@ -954,7 +963,7 @@ func scanSourceFiles(path string, filter string) ([]SourceFile, error) {
 				Path:  path,
 			})
 		}
-		return files, nil
+		return files, false, nil
 	}
 
 	// 如果是目录，递归扫描
@@ -966,6 +975,12 @@ func scanSourceFiles(path string, filter string) ([]SourceFile, error) {
 		// 跳过目录
 		if info.IsDir() {
 			return nil
+		}
+
+		// 检查是否达到最大文件数
+		if index >= maxFiles {
+			truncated = true
+			return filepath.SkipDir // 停止扫描
 		}
 
 		// 应用过滤器
@@ -980,11 +995,11 @@ func scanSourceFiles(path string, filter string) ([]SourceFile, error) {
 		return nil
 	})
 
-	if err != nil {
-		return nil, fmt.Errorf("扫描文件失败: %v", err)
+	if err != nil && err != filepath.SkipDir {
+		return nil, false, fmt.Errorf("扫描文件失败: %v", err)
 	}
 
-	return files, nil
+	return files, truncated, nil
 }
 
 // matchFilter 检查文件是否匹配过滤器

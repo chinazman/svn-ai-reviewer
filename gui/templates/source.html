@@ -201,14 +201,16 @@
                 <div class="info-box">
                     💡 提示：<br>
                     - 目录/文件路径：可以是目录或具体文件路径<br>
-                    - 过滤字符串：支持 * 号通配符，例如 *.go 或 src/*.js<br>
+                    - 过滤字符串：支持 * 号通配符，例如 *.java 或 src/*.js（默认 *.java）<br>
+                    - 最大文件数：限制扫描的文件数量，防止加载过多文件（默认100）<br>
                     - 输入内容会自动保存，下次打开时自动恢复
                 </div>
                 <div class="input-group">
                     <input type="text" id="sourcePath" placeholder="目录或文件路径 (例如: . 或 src/main.go)">
                 </div>
                 <div class="input-group">
-                    <input type="text" id="filterPattern" placeholder="过滤字符串 (例如: *.go 或 src/*.js，留空表示所有文件)">
+                    <input type="text" id="filterPattern" placeholder="过滤字符串 (例如: *.java 或 src/*.js，留空表示所有文件)" value="*.java">
+                    <input type="number" id="maxFiles" placeholder="最大文件数 (默认100)" style="flex: 0 0 200px;" min="1" max="1000" value="100">
                     <button onclick="scanFiles()">扫描文件</button>
                 </div>
             </div>
@@ -352,23 +354,33 @@
         function loadScanParams() {
             const path = localStorage.getItem('source_path');
             const filter = localStorage.getItem('source_filter');
+            const maxFiles = localStorage.getItem('source_max_files');
             
             if (path) document.getElementById('sourcePath').value = path;
             if (filter) document.getElementById('filterPattern').value = filter;
+            if (maxFiles) document.getElementById('maxFiles').value = maxFiles;
         }
 
         async function scanFiles() {
             const path = document.getElementById('sourcePath').value;
             const filter = document.getElementById('filterPattern').value;
+            const maxFilesInput = document.getElementById('maxFiles').value;
+            const maxFiles = maxFilesInput ? parseInt(maxFilesInput) : 100;
             
             if (!path) {
                 alert('请输入目录或文件路径');
                 return;
             }
             
+            if (maxFiles < 1 || maxFiles > 1000) {
+                alert('最大文件数必须在 1-1000 之间');
+                return;
+            }
+            
             // 保存扫描参数
             localStorage.setItem('source_path', path);
             localStorage.setItem('source_filter', filter);
+            localStorage.setItem('source_max_files', maxFiles.toString());
             
             log('正在扫描文件...');
             
@@ -376,7 +388,7 @@
                 const response = await fetch('/api/source/scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path, filter })
+                    body: JSON.stringify({ path, filter, max_files: maxFiles })
                 });
                 
                 const data = await response.json();
@@ -388,6 +400,12 @@
                     // 默认不勾选文件
                     selectedFileIndices.clear();
                     renderFiles();
+                    
+                    if (data.truncated) {
+                        log(`⚠️ 文件数量超过限制，仅显示前 ${maxFiles} 个文件`);
+                        alert(`文件数量较多，仅显示前 ${maxFiles} 个文件。\n如需查看更多，请增加最大文件数或使用更精确的过滤条件。`);
+                    }
+                    
                     log(`✅ 扫描到 ${files.length} 个文件`);
                     document.getElementById('filesSection').style.display = 'block';
                     document.getElementById('reviewSection').style.display = 'block';
