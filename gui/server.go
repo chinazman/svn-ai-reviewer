@@ -25,12 +25,18 @@ import (
 var templates embed.FS
 
 type Server struct {
-	cfg        *config.Config
-	changes    []svn.FileChange
-	logEntries []svn.LogEntry
-	svnClient  *svn.Client
-	mode       string // "local" or "online"
-	logChannel chan string // SSE日志通道
+	cfg         *config.Config
+	changes     []svn.FileChange
+	logEntries  []svn.LogEntry
+	svnClient   *svn.Client
+	mode        string // "local", "online" or "source"
+	logChannel  chan string // SSE日志通道
+	sourceFiles []SourceFile // 源代码模式的文件列表
+}
+
+type SourceFile struct {
+	Index int    `json:"index"`
+	Path  string `json:"path"`
 }
 
 func NewServer() *Server {
@@ -42,6 +48,7 @@ func NewServer() *Server {
 func (s *Server) Start() error {
 	http.HandleFunc("/", s.handleIndex)
 	http.HandleFunc("/online", s.handleOnlineIndex)
+	http.HandleFunc("/source", s.handleSourceIndex)
 	http.HandleFunc("/api/list-configs", s.handleListConfigs)
 	http.HandleFunc("/api/load-config", s.handleLoadConfig)
 	http.HandleFunc("/api/scan", s.handleScan)
@@ -52,6 +59,9 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/online/files", s.handleOnlineFiles)
 	http.HandleFunc("/api/online/review", s.handleOnlineReview)
 	http.HandleFunc("/api/online/diff", s.handleOnlineDiff) // 在线模式查看变更
+	http.HandleFunc("/api/source/scan", s.handleSourceScan)
+	http.HandleFunc("/api/source/content", s.handleSourceContent)
+	http.HandleFunc("/api/source/review", s.handleSourceReview)
 	http.HandleFunc("/api/logs", s.handleLogs) // SSE日志流
 	
 	// 提供静态文件服务 - 报告目录
@@ -61,6 +71,7 @@ func (s *Server) Start() error {
 	fmt.Printf("🚀 SVN 代码审核工具已启动\n")
 	fmt.Printf("📱 本地模式: http://%s\n", addr)
 	fmt.Printf("📱 在线模式: http://%s/online\n", addr)
+	fmt.Printf("📱 源代码模式: http://%s/source\n", addr)
 	fmt.Printf("📊 报告目录: http://%s/reports/\n", addr)
 	fmt.Println("按 Ctrl+C 停止服务器")
 
@@ -84,6 +95,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleOnlineIndex(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFS(templates, "templates/online.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, nil)
+}
+
+func (s *Server) handleSourceIndex(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFS(templates, "templates/source.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -860,5 +880,310 @@ func (s *Server) handleOnlineDiff(w http.ResponseWriter, r *http.Request) {
 		"status":   file.Status,
 		"revision": file.Revision,
 		"content":  content,
+	}, http.StatusOK)
+}
+
+
+// handleSourceScan 处理源代码模式的文件扫描
+func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.cfg == nil {
+		respondJSON(w, map[string]interface{}{"error": "请先加载配置文件"}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Path   string `json:"path"`
+		Filter string `json:"filter"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	if req.Path == "" {
+		respondJSON(w, map[string]interface{}{"error": "请提供目录或文件路径"}, http.StatusBadRequest)
+		return
+	}
+
+	// 扫描文件
+	files, err := scanSourceFiles(req.Path, req.Filter)
+	if err != nil {
+		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError)
+		return
+	}
+
+	s.sourceFiles = files
+	s.mode = "source"
+
+	// 初始化为空数组
+	fileList := make([]map[string]interface{}, 0)
+	for _, file := range files {
+		fileList = append(fileList, map[string]interface{}{
+			"index": file.Index,
+			"path":  file.Path,
+		})
+	}
+
+	respondJSON(w, map[string]interface{}{
+		"success": true,
+		"files":   fileList,
+	}, http.StatusOK)
+}
+
+// scanSourceFiles 扫描指定路径下的文件
+func scanSourceFiles(path string, filter string) ([]SourceFile, error) {
+	var files []SourceFile
+	index := 0
+
+	// 检查路径是否存在
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("路径不存在: %v", err)
+	}
+
+	// 如果是文件，直接返回
+	if !info.IsDir() {
+		if matchFilter(path, filter) {
+			files = append(files, SourceFile{
+				Index: index,
+				Path:  path,
+			})
+		}
+		return files, nil
+	}
+
+	// 如果是目录，递归扫描
+	err = filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 跳过目录
+		if info.IsDir() {
+			return nil
+		}
+
+		// 应用过滤器
+		if matchFilter(filePath, filter) {
+			files = append(files, SourceFile{
+				Index: index,
+				Path:  filePath,
+			})
+			index++
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("扫描文件失败: %v", err)
+	}
+
+	return files, nil
+}
+
+// matchFilter 检查文件是否匹配过滤器
+func matchFilter(filePath string, filter string) bool {
+	// 如果没有过滤器，匹配所有文件
+	if filter == "" {
+		return true
+	}
+
+	// 将路径分隔符统一为 /
+	filePath = filepath.ToSlash(filePath)
+	filter = filepath.ToSlash(filter)
+
+	// 简单的通配符匹配
+	matched, err := filepath.Match(filter, filepath.Base(filePath))
+	if err == nil && matched {
+		return true
+	}
+
+	// 尝试匹配完整路径
+	matched, err = filepath.Match(filter, filePath)
+	if err == nil && matched {
+		return true
+	}
+
+	// 支持多级路径匹配，例如 src/*.go
+	if strings.Contains(filter, "/") {
+		parts := strings.Split(filter, "/")
+		pathParts := strings.Split(filePath, "/")
+
+		// 从后往前匹配
+		if len(parts) <= len(pathParts) {
+			match := true
+			for i := 0; i < len(parts); i++ {
+				partIdx := len(parts) - 1 - i
+				pathIdx := len(pathParts) - 1 - i
+
+				matched, err := filepath.Match(parts[partIdx], pathParts[pathIdx])
+				if err != nil || !matched {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// handleSourceContent 处理源代码模式的文件内容查看
+func (s *Server) handleSourceContent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	if req.Index < 0 || req.Index >= len(s.sourceFiles) {
+		respondJSON(w, map[string]interface{}{"error": "无效的文件索引"}, http.StatusBadRequest)
+		return
+	}
+
+	file := s.sourceFiles[req.Index]
+
+	// 读取文件内容
+	content, err := os.ReadFile(file.Path)
+	if err != nil {
+		respondJSON(w, map[string]interface{}{"error": fmt.Sprintf("读取文件失败: %v", err)}, http.StatusInternalServerError)
+		return
+	}
+
+	respondJSON(w, map[string]interface{}{
+		"success": true,
+		"file":    file.Path,
+		"content": string(content),
+	}, http.StatusOK)
+}
+
+// handleSourceReview 处理源代码模式的审核
+func (s *Server) handleSourceReview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.cfg == nil {
+		respondJSON(w, map[string]interface{}{"error": "请先加载配置文件"}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Indices []int `json:"indices"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, map[string]interface{}{"error": err.Error()}, http.StatusBadRequest)
+		return
+	}
+
+	// 获取选中的文件
+	var filesToReview []SourceFile
+	for _, idx := range req.Indices {
+		if idx >= 0 && idx < len(s.sourceFiles) {
+			filesToReview = append(filesToReview, s.sourceFiles[idx])
+		}
+	}
+
+	if len(filesToReview) == 0 {
+		respondJSON(w, map[string]interface{}{"error": "请至少选择一个文件"}, http.StatusBadRequest)
+		return
+	}
+
+	// 在后台执行审核
+	go func() {
+		s.sendLog("开始审核 %d 个文件...", len(filesToReview))
+
+		aiClient, err := ai.NewClient(&s.cfg.AI)
+		if err != nil {
+			s.sendLog("❌ 创建AI客户端失败: %v", err)
+			return
+		}
+
+		ctx := context.Background()
+		htmlReport := &report.Report{
+			Title:       "源代码审核报告",
+			GeneratedAt: time.Now(),
+			WorkDir:     "源代码审核",
+			Reviews:     make([]report.FileReview, 0),
+		}
+
+		for i, file := range filesToReview {
+			s.sendLog("[%d/%d] 正在审核: %s", i+1, len(filesToReview), file.Path)
+			fileReview := report.FileReview{
+				FileName: file.Path,
+				Status:   "源代码",
+			}
+
+			// 读取文件内容
+			content, err := os.ReadFile(file.Path)
+			if err != nil {
+				s.sendLog("  ❌ 读取文件失败: %v", err)
+				fileReview.Error = err
+				htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+				continue
+			}
+
+			fileContent := string(content)
+			if strings.TrimSpace(fileContent) == "" {
+				s.sendLog("  ℹ️  文件为空，跳过审核")
+				continue
+			}
+
+			// 保存文件内容到报告
+			fileReview.Diff = fileContent
+
+			// 调用AI审核
+			result, err := aiClient.Review(ctx, file.Path, fileContent, s.cfg.ReviewPrompt)
+			if err != nil {
+				s.sendLog("  ❌ 审核失败: %v", err)
+				fileReview.Error = err
+			} else {
+				s.sendLog("  ✅ 审核完成")
+				fileReview.Result = result
+			}
+
+			htmlReport.Reviews = append(htmlReport.Reviews, fileReview)
+		}
+
+		// 生成报告
+		s.sendLog("正在生成HTML报告...")
+		reportPath, err := report.GenerateHTML(htmlReport, s.cfg.Report.OutputDir)
+		if err != nil {
+			s.sendLog("❌ 生成报告失败: %v", err)
+			return
+		}
+
+		absPath, _ := filepath.Abs(reportPath)
+		s.sendLog("✅ 报告已生成: %s", absPath)
+
+		// 发送报告URL到前端
+		reportFileName := filepath.Base(reportPath)
+		reportURL := "http://localhost:8080/reports/" + reportFileName
+		s.sendLog("REPORT_URL:" + reportURL)
+
+		s.sendLog("所有文件审核完成！")
+	}()
+
+	// 立即返回，审核在后台进行
+	respondJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "审核已开始，请查看日志",
 	}, http.StatusOK)
 }

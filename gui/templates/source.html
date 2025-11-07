@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SVN 在线审核工具</title>
+    <title>SVN 源代码审核工具</title>
     <style>
         * {
             margin: 0;
@@ -73,7 +73,7 @@
             gap: 10px;
             margin-bottom: 15px;
         }
-        input[type="text"], input[type="password"] {
+        input[type="text"] {
             flex: 1;
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -81,7 +81,7 @@
             font-size: 14px;
             transition: border-color 0.3s;
         }
-        input[type="text"]:focus, input[type="password"]:focus {
+        input[type="text"]:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -132,15 +132,6 @@
         tr:hover {
             background: #f8f9fa;
         }
-        .file-status {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .status-M { background: #fff3cd; color: #856404; }
-        .status-A { background: #d4edda; color: #155724; }
-        .status-D { background: #f8d7da; color: #721c24; }
         .log-area {
             background: #1e1e1e;
             color: #d4d4d4;
@@ -178,36 +169,21 @@
             border-radius: 4px;
             font-size: 14px;
         }
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 15px;
-        }
         .checkbox-cell {
             width: 40px;
             text-align: center;
-        }
-        .revision-cell {
-            width: 80px;
-        }
-        .author-cell {
-            width: 120px;
-        }
-        .date-cell {
-            width: 180px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌐 SVN 在线审核工具</h1>
-            <p>连接SVN服务器，审核历史版本</p>
+            <h1>📄 SVN 源代码审核工具</h1>
+            <p>直接输入目录或文件路径进行代码审核</p>
             <div class="mode-switch">
                 <button class="mode-btn" onclick="window.location.href='/'">本地模式</button>
-                <button class="mode-btn active">在线模式</button>
-                <button class="mode-btn" onclick="window.location.href='/source'">源代码模式</button>
+                <button class="mode-btn" onclick="window.location.href='/online'">在线模式</button>
+                <button class="mode-btn active">源代码模式</button>
             </div>
         </div>
         
@@ -221,63 +197,29 @@
             </div>
 
             <div class="section">
-                <div class="section-title">🔗 SVN 服务器连接</div>
-                <div class="input-group">
-                    <input type="text" id="svnURL" placeholder="SVN 服务器地址 (例如: https://svn.example.com/repo 或 file:///F:/path/to/repo)">
+                <div class="section-title">🔍 文件扫描</div>
+                <div class="info-box">
+                    💡 提示：<br>
+                    - 目录/文件路径：可以是目录或具体文件路径<br>
+                    - 过滤字符串：支持 * 号通配符，例如 *.go 或 src/*.js<br>
+                    - 输入内容会自动保存，下次打开时自动恢复
                 </div>
                 <div class="input-group">
-                    <input type="text" id="svnUsername" placeholder="用户名 (file:// 协议可留空)">
-                    <input type="password" id="svnPassword" placeholder="密码 (file:// 协议可留空)">
+                    <input type="text" id="sourcePath" placeholder="目录或文件路径 (例如: . 或 src/main.go)">
                 </div>
                 <div class="input-group">
-                    <label><input type="checkbox" id="saveCredentials"> 记住配置</label>
-                    <button onclick="connectSVN()">连接服务器</button>
-                </div>
-                <div id="connectionInfo"></div>
-            </div>
-
-            <div class="section" id="searchSection" style="display:none;">
-                <div class="section-title">🔍 搜索提交记录</div>
-                <div class="input-group">
-                    <input type="text" id="searchPath" placeholder="目录路径 (默认根目录)">
-                    <input type="text" id="searchKeyword" placeholder="关键词 (支持搜索提交信息和作者)">
-                    <button onclick="searchLogs()">搜索</button>
-                </div>
-            </div>
-
-            <div class="section" id="logsSection" style="display:none;">
-                <div class="section-title">📋 提交记录 (点击选择版本)</div>
-                <div class="table-container">
-                    <table id="logsTable">
-                        <thead>
-                            <tr>
-                                <th class="checkbox-cell"><input type="checkbox" id="selectAllLogs" onchange="toggleSelectAllLogs()"></th>
-                                <th class="revision-cell">版本</th>
-                                <th class="author-cell">作者</th>
-                                <th class="date-cell">日期</th>
-                                <th>提交信息</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logsBody">
-                        </tbody>
-                    </table>
-                </div>
-                <div class="pagination">
-                    <span id="offsetInfo" style="margin-right: 10px; color: #666;">已加载数量: 0</span>
-                    <button onclick="loadNext()" id="nextBtn" disabled>加载更多</button>
-                    <button onclick="loadSelectedFiles()">加载选中版本的文件</button>
+                    <input type="text" id="filterPattern" placeholder="过滤字符串 (例如: *.go 或 src/*.js，留空表示所有文件)">
+                    <button onclick="scanFiles()">扫描文件</button>
                 </div>
             </div>
 
             <div class="section" id="filesSection" style="display:none;">
-                <div class="section-title">📝 变更文件列表</div>
+                <div class="section-title">📝 文件列表 (默认不勾选)</div>
                 <div class="table-container">
                     <table id="filesTable">
                         <thead>
                             <tr>
                                 <th class="checkbox-cell"><input type="checkbox" id="selectAllFiles" onchange="toggleSelectAllFiles()"></th>
-                                <th class="revision-cell">版本</th>
-                                <th>状态</th>
                                 <th>文件路径</th>
                                 <th style="width: 100px;">操作</th>
                             </tr>
@@ -302,15 +244,9 @@
     </div>
 
     <script>
-        let logs = [];
         let files = [];
-        let selectedLogIndices = new Set();
         let selectedFileIndices = new Set();
-        let currentOffset = 0;
-        let currentSearchParams = {}; // 保存当前搜索参数
-        const limit = 100;
         let eventSource = null;
-        let hasMoreLogs = true; // 是否还有更多日志
 
         function log(message) {
             const logArea = document.getElementById('logArea');
@@ -321,15 +257,13 @@
             // 检查是否是报告URL消息
             if (message.startsWith('REPORT_URL:')) {
                 const reportURL = message.substring('REPORT_URL:'.length);
-                // 在新标签页中打开报告
                 window.open(reportURL, '_blank');
-                // 直接添加到日志区域，避免递归调用
                 const timestamp2 = new Date().toLocaleTimeString();
                 logArea.textContent += `[${timestamp2}] ✅ 已在新标签页打开报告\n`;
                 logArea.scrollTop = logArea.scrollHeight;
             }
             
-            // 检查是否是审核完成的消息或报告URL消息（恢复按钮状态）
+            // 检查是否是审核完成的消息
             if (message.includes('所有文件审核完成') || message.startsWith('REPORT_URL:')) {
                 const reviewBtn = document.getElementById('reviewBtn');
                 if (reviewBtn) {
@@ -353,7 +287,6 @@
             
             eventSource.onerror = function(error) {
                 console.error('SSE Error:', error);
-                // 自动重连
                 setTimeout(connectLogs, 5000);
             };
         }
@@ -375,7 +308,6 @@
                         select.appendChild(option);
                     });
                     
-                    // 加载保存的配置选择
                     const savedConfig = localStorage.getItem('selected_config');
                     if (savedConfig && data.configs.includes(savedConfig)) {
                         select.value = savedConfig;
@@ -388,8 +320,6 @@
 
         async function loadConfig() {
             const configPath = document.getElementById('configPath').value;
-            
-            // 保存配置选择
             localStorage.setItem('selected_config', configPath);
             
             log('正在加载配置...');
@@ -410,211 +340,55 @@
                     document.getElementById('configInfo').innerHTML = 
                         `<div class="info-box">✅ 已加载配置 - Provider: ${data.config.provider}, Model: ${data.config.model}</div>`;
                     
-                    // 尝试加载保存的SVN凭据和搜索参数
-                    loadSavedCredentials();
-                    loadSearchParams();
+                    // 加载保存的扫描参数
+                    loadScanParams();
                 }
             } catch (error) {
                 log('❌ 请求失败: ' + error.message);
             }
         }
 
-        function loadSavedCredentials() {
-            const url = localStorage.getItem('svn_url');
-            const username = localStorage.getItem('svn_username');
-            const password = localStorage.getItem('svn_password');
+        // 加载保存的扫描参数
+        function loadScanParams() {
+            const path = localStorage.getItem('source_path');
+            const filter = localStorage.getItem('source_filter');
             
-            if (url) document.getElementById('svnURL').value = url;
-            if (username) document.getElementById('svnUsername').value = username;
-            if (password) document.getElementById('svnPassword').value = password;
-            if (url && username && password) {
-                document.getElementById('saveCredentials').checked = true;
-            }
+            if (path) document.getElementById('sourcePath').value = path;
+            if (filter) document.getElementById('filterPattern').value = filter;
         }
 
-        async function connectSVN() {
-            const url = document.getElementById('svnURL').value;
-            const username = document.getElementById('svnUsername').value;
-            const password = document.getElementById('svnPassword').value;
-            const save = document.getElementById('saveCredentials').checked;
+        async function scanFiles() {
+            const path = document.getElementById('sourcePath').value;
+            const filter = document.getElementById('filterPattern').value;
             
-            if (!url) {
-                alert('请填写SVN服务器地址');
+            if (!path) {
+                alert('请输入目录或文件路径');
                 return;
             }
             
-            // 如果不是file://协议，建议填写用户名密码
-            if (!url.startsWith('file://') && !username) {
-                if (!confirm('未填写用户名，是否继续连接？\n(file:// 协议不需要用户名密码)')) {
-                    return;
-                }
-            }
+            // 保存扫描参数
+            localStorage.setItem('source_path', path);
+            localStorage.setItem('source_filter', filter);
             
-            log('正在连接SVN服务器...');
+            log('正在扫描文件...');
             
             try {
-                const response = await fetch('/api/online/connect', {
+                const response = await fetch('/api/source/scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, username, password, save })
+                    body: JSON.stringify({ path, filter })
                 });
                 
                 const data = await response.json();
                 if (data.error) {
                     log('❌ ' + data.error);
-                    alert('连接失败: ' + data.error);
+                    alert('扫描失败: ' + data.error);
                 } else {
-                    log('✅ SVN服务器连接成功');
-                    document.getElementById('connectionInfo').innerHTML = 
-                        `<div class="info-box">✅ 已连接到: ${url}</div>`;
-                    document.getElementById('searchSection').style.display = 'block';
-                    
-                    if (save) {
-                        localStorage.setItem('svn_url', url);
-                        localStorage.setItem('svn_username', username);
-                        localStorage.setItem('svn_password', password);
-                    }
-                }
-            } catch (error) {
-                log('❌ 请求失败: ' + error.message);
-            }
-        }
-
-        // 加载保存的搜索参数
-        function loadSearchParams() {
-            const path = localStorage.getItem('search_path');
-            const keyword = localStorage.getItem('search_keyword');
-            
-            if (path) document.getElementById('searchPath').value = path;
-            if (keyword) document.getElementById('searchKeyword').value = keyword;
-        }
-
-        async function searchLogs() {
-            const path = document.getElementById('searchPath').value;
-            const keyword = document.getElementById('searchKeyword').value;
-            
-            // 保存搜索参数
-            localStorage.setItem('search_path', path);
-            localStorage.setItem('search_keyword', keyword);
-            
-            // 重置偏移量和搜索参数
-            currentOffset = 0;
-            currentSearchParams = { path, keyword };
-            
-            // 清空现有日志列表（新搜索时）
-            logs = [];
-            selectedLogIndices.clear();
-            
-            await performSearch();
-        }
-
-        async function performSearch() {
-            log('正在搜索提交记录...');
-            
-            try {
-                const response = await fetch('/api/online/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        path: currentSearchParams.path, 
-                        keyword: currentSearchParams.keyword, 
-                        limit, 
-                        offset: currentOffset 
-                    })
-                });
-                
-                const data = await response.json();
-                if (data.error) {
-                    log('❌ ' + data.error);
-                    alert('搜索失败: ' + data.error);
-                } else {
-                    // 确保返回的数据是数组
-                    const newLogs = data.logs || [];
-                    
-                    // 追加新日志到现有列表（而不是替换）
-                    logs = logs.concat(newLogs);
-                    
-                    // 从服务器返回的hasMore判断是否还有更多日志
-                    hasMoreLogs = data.hasMore || false;
-                    
-                    renderLogs();
-                    updatePaginationButtons();
-                    
-                    log(`✅ 本次获取 ${newLogs.length} 条记录，已加载总数: ${logs.length}`);
-                    document.getElementById('logsSection').style.display = 'block';
-                }
-            } catch (error) {
-                log('❌ 请求失败: ' + error.message);
-            }
-        }
-
-        function renderLogs() {
-            const tbody = document.getElementById('logsBody');
-            if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">没有找到提交记录</td></tr>';
-                return;
-            }
-
-            let html = '';
-            logs.forEach(log => {
-                const checked = selectedLogIndices.has(log.index) ? 'checked' : '';
-                const message = log.message.replace(/\n/g, ' ').substring(0, 100);
-                html += `
-                    <tr>
-                        <td class="checkbox-cell"><input type="checkbox" ${checked} onchange="toggleLog(${log.index})"></td>
-                        <td class="revision-cell">r${log.revision}</td>
-                        <td class="author-cell">${log.author}</td>
-                        <td class="date-cell">${log.date.substring(0, 19)}</td>
-                        <td>${message}</td>
-                    </tr>
-                `;
-            });
-            tbody.innerHTML = html;
-        }
-
-        function toggleSelectAllLogs() {
-            const checked = document.getElementById('selectAllLogs').checked;
-            if (checked) {
-                selectedLogIndices = new Set(logs.map(l => l.index));
-            } else {
-                selectedLogIndices.clear();
-            }
-            renderLogs();
-        }
-
-        function toggleLog(index) {
-            if (selectedLogIndices.has(index)) {
-                selectedLogIndices.delete(index);
-            } else {
-                selectedLogIndices.add(index);
-            }
-        }
-
-        async function loadSelectedFiles() {
-            if (selectedLogIndices.size === 0) {
-                alert('请至少选择一个版本');
-                return;
-            }
-
-            const revisions = Array.from(selectedLogIndices).map(i => logs[i].revision);
-            log(`正在加载 ${revisions.length} 个版本的文件...`);
-            
-            try {
-                const response = await fetch('/api/online/files', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ revisions })
-                });
-                
-                const data = await response.json();
-                if (data.error) {
-                    log('❌ ' + data.error);
-                    alert('加载文件失败: ' + data.error);
-                } else {
-                    files = data.files;
-                    selectedFileIndices = new Set(files.map(f => f.index));
+                    files = data.files || [];
+                    // 默认不勾选文件
+                    selectedFileIndices.clear();
                     renderFiles();
-                    log(`✅ 检测到 ${files.length} 个变更文件`);
+                    log(`✅ 扫描到 ${files.length} 个文件`);
                     document.getElementById('filesSection').style.display = 'block';
                     document.getElementById('reviewSection').style.display = 'block';
                 }
@@ -626,31 +400,45 @@
         function renderFiles() {
             const tbody = document.getElementById('filesBody');
             if (files.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">没有变更文件</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">没有找到文件</td></tr>';
                 return;
             }
 
             let html = '';
             files.forEach(file => {
                 const checked = selectedFileIndices.has(file.index) ? 'checked' : '';
-                const statusClass = `status-${file.status}`;
-                const statusText = getStatusText(file.status);
                 html += `
                     <tr>
                         <td class="checkbox-cell"><input type="checkbox" ${checked} onchange="toggleFile(${file.index})"></td>
-                        <td class="revision-cell">r${file.revision}</td>
-                        <td><span class="file-status ${statusClass}">${statusText}</span></td>
                         <td>${file.path}</td>
-                        <td><button onclick="viewOnlineDiff(${file.index})" style="padding: 4px 12px; font-size: 12px;">查看变更</button></td>
+                        <td><button onclick="viewFile(${file.index})" style="padding: 4px 12px; font-size: 12px;">查看内容</button></td>
                     </tr>
                 `;
             });
             tbody.innerHTML = html;
             
-            // 更新全选复选框状态
             updateSelectAllFilesCheckbox();
         }
-        
+
+        function toggleSelectAllFiles() {
+            const checked = document.getElementById('selectAllFiles').checked;
+            if (checked) {
+                selectedFileIndices = new Set(files.map(f => f.index));
+            } else {
+                selectedFileIndices.clear();
+            }
+            renderFiles();
+        }
+
+        function toggleFile(index) {
+            if (selectedFileIndices.has(index)) {
+                selectedFileIndices.delete(index);
+            } else {
+                selectedFileIndices.add(index);
+            }
+            updateSelectAllFilesCheckbox();
+        }
+
         function updateSelectAllFilesCheckbox() {
             const selectAllCheckbox = document.getElementById('selectAllFiles');
             if (selectAllCheckbox && files.length > 0) {
@@ -659,9 +447,9 @@
             }
         }
 
-        async function viewOnlineDiff(index) {
+        async function viewFile(index) {
             try {
-                const response = await fetch('/api/online/diff', {
+                const response = await fetch('/api/source/content', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ index: index })
@@ -669,26 +457,25 @@
                 
                 const data = await response.json();
                 if (data.error) {
-                    alert('获取变更失败: ' + data.error);
+                    alert('获取文件内容失败: ' + data.error);
                 } else {
-                    showDiffModal(data.file, data.status, data.revision, data.content);
+                    showFileModal(data.file, data.content);
                 }
             } catch (error) {
                 alert('请求失败: ' + error.message);
             }
         }
 
-        function showDiffModal(file, status, revision, content) {
+        function showFileModal(file, content) {
             const modal = document.createElement('div');
             modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
             
             const modalContent = document.createElement('div');
             modalContent.style.cssText = 'background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
             
-            const statusText = getStatusText(status);
             modalContent.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">${file} (r${revision}) <span class="file-status status-${status}">${statusText}</span></h3>
+                    <h3 style="margin: 0;">${file}</h3>
                     <button onclick="this.closest('div').parentElement.parentElement.remove()" style="padding: 8px 16px;">关闭</button>
                 </div>
                 <pre style="background: #f4f4f4; padding: 15px; border-radius: 4px; overflow: auto; max-height: 70vh; font-size: 13px; line-height: 1.5;">${escapeHtml(content)}</pre>
@@ -710,31 +497,6 @@
             return div.innerHTML;
         }
 
-        function toggleSelectAllFiles() {
-            const checked = document.getElementById('selectAllFiles').checked;
-            if (checked) {
-                selectedFileIndices = new Set(files.map(f => f.index));
-            } else {
-                selectedFileIndices.clear();
-            }
-            renderFiles();
-        }
-
-        function toggleFile(index) {
-            if (selectedFileIndices.has(index)) {
-                selectedFileIndices.delete(index);
-            } else {
-                selectedFileIndices.add(index);
-            }
-            // 更新全选复选框状态
-            updateSelectAllFilesCheckbox();
-        }
-
-        function getStatusText(status) {
-            const map = { 'M': '修改', 'A': '新增', 'D': '删除' };
-            return map[status] || status;
-        }
-
         async function startReview() {
             if (selectedFileIndices.size === 0) {
                 alert('请至少选择一个文件');
@@ -746,7 +508,7 @@
             reviewBtn.innerHTML = '<span class="loading"></span> 审核中...';
             
             try {
-                const response = await fetch('/api/online/review', {
+                const response = await fetch('/api/source/review', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ indices: Array.from(selectedFileIndices) })
@@ -756,51 +518,23 @@
                 if (data.error) {
                     log('❌ ' + data.error);
                     alert('审核失败: ' + data.error);
-                    // 出错时恢复按钮
                     reviewBtn.disabled = false;
                     reviewBtn.textContent = '开始审核';
                 }
-                // 成功时不恢复按钮，等待SSE消息"所有文件审核完成"
             } catch (error) {
                 log('❌ 请求失败: ' + error.message);
                 alert('请求失败: ' + error.message);
-                // 出错时恢复按钮
                 reviewBtn.disabled = false;
                 reviewBtn.textContent = '开始审核';
             }
         }
 
-        async function loadNext() {
-            if (!hasMoreLogs) {
-                log('⚠️ 没有更多记录了');
-                return;
-            }
-            
-            currentOffset += limit;
-            await performSearch();
-        }
-
-        function updatePaginationButtons() {
-            const nextBtn = document.getElementById('nextBtn');
-            if (nextBtn) {
-                nextBtn.disabled = !hasMoreLogs;
-            }
-            
-            // 更新已加载数量显示（使用 offset + limit）
-            const offsetInfo = document.getElementById('offsetInfo');
-            if (offsetInfo) {
-                const loadedCount = currentOffset + limit;
-                offsetInfo.textContent = `已加载数量: ${loadedCount}`;
-            }
-        }
-
         window.onload = async () => {
-            await loadConfigList(); // 先加载配置列表
-            loadConfig(); // 然后加载配置
-            connectLogs(); // 连接SSE日志流
+            await loadConfigList();
+            loadConfig();
+            connectLogs();
         };
 
-        // 页面卸载时关闭SSE连接
         window.onbeforeunload = () => {
             if (eventSource) {
                 eventSource.close();
